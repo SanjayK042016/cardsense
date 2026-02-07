@@ -1,4 +1,4 @@
-import { Upload, CreditCard, TrendingUp, Award, AlertTriangle, X, CheckCircle, Zap, DollarSign } from 'lucide-react';
+import { Upload, CreditCard, TrendingUp, Award, AlertTriangle, X, CheckCircle, Zap } from 'lucide-react';
 import { useState } from 'react';
 
 // Types
@@ -653,7 +653,7 @@ function App() {
       {/* Recommender Modal */}
       {showRecommender && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-8">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Which Card Should I Use?</h2>
               <button 
@@ -671,116 +671,131 @@ function App() {
             </div>
 
             {!recommendation ? (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    What are you buying?
-                  </label>
-                  <select
-                    value={merchantType}
-                    onChange={(e) => setMerchantType(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  >
-                    <option value="">Select category...</option>
-                    <option value="dining">Dining & Restaurants</option>
-                    <option value="shopping">Shopping & Retail</option>
-                    <option value="travel">Travel & Hotels</option>
-                    <option value="groceries">Groceries</option>
-                    <option value="online">Online Shopping</option>
-                    <option value="bills">Bills & Utilities</option>
-                    <option value="others">Others</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Amount (₹)
-                  </label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="Enter amount"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    What's your priority?
-                  </label>
-                  <div className="grid grid-cols-3 gap-3">
-                    <button
-                      onClick={() => setPriority('rewards')}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        priority === 'rewards'
-                          ? 'border-indigo-600 bg-indigo-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <Award className={`w-6 h-6 mx-auto mb-2 ${
-                        priority === 'rewards' ? 'text-indigo-600' : 'text-gray-400'
-                      }`} />
-                      <p className={`text-sm font-medium ${
-                        priority === 'rewards' ? 'text-indigo-900' : 'text-gray-600'
-                      }`}>
-                        Max Rewards
-                      </p>
-                    </button>
-
-                    <button
-                      onClick={() => setPriority('safety')}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        priority === 'safety'
-                          ? 'border-green-600 bg-green-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <CheckCircle className={`w-6 h-6 mx-auto mb-2 ${
-                        priority === 'safety' ? 'text-green-600' : 'text-gray-400'
-                      }`} />
-                      <p className={`text-sm font-medium ${
-                        priority === 'safety' ? 'text-green-900' : 'text-gray-600'
-                      }`}>
-                        Safety First
-                      </p>
-                    </button>
-
-                    <button
-                      onClick={() => setPriority('balance')}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        priority === 'balance'
-                          ? 'border-purple-600 bg-purple-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <TrendingUp className={`w-6 h-6 mx-auto mb-2 ${
-                        priority === 'balance' ? 'text-purple-600' : 'text-gray-400'
-                      }`} />
-                      <p className={`text-sm font-medium ${
-                        priority === 'balance' ? 'text-purple-900' : 'text-gray-600'
-                      }`}>
-                        Balanced
-                      </p>
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2 text-center">
-                    {priority === 'rewards' && 'Maximize rewards based on your spending history'}
-                    {priority === 'safety' && 'Keep utilization low and maintain healthy limits'}
-                    {priority === 'balance' && 'Best of both worlds - good rewards with safe utilization'}
+              <>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                  <p className="text-sm text-blue-900">
+                    <strong>How it works:</strong> Based on your <strong>last 6 months</strong> of actual spending patterns, 
+                    we recommend the best card for this specific purchase.
                   </p>
                 </div>
 
-                <button
-                  onClick={getRecommendation}
-                  className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl"
-                >
-                  Get Recommendation →
-                </button>
-              </div>
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      What are you buying?
+                    </label>
+                    <select
+                      value={merchantType}
+                      onChange={(e) => setMerchantType(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                      <option value="">Select category...</option>
+                      <option value="dining">🍽️ Dining & Restaurants</option>
+                      <option value="shopping">🛍️ Shopping & Retail</option>
+                      <option value="travel">✈️ Travel & Hotels</option>
+                      <option value="groceries">🛒 Groceries</option>
+                      <option value="online">💻 Online Shopping</option>
+                      <option value="bills">💡 Bills & Utilities</option>
+                      <option value="others">📦 Others</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-2">
+                      💡 We analyze your past 6 months of spending in each category
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Transaction Amount
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-3.5 text-gray-400 font-semibold">₹</span>
+                      <input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="Enter amount (e.g., 5000)"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      We'll check your current limits and utilization
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      What's your priority?
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <button
+                        onClick={() => setPriority('rewards')}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          priority === 'rewards'
+                            ? 'border-indigo-600 bg-indigo-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <Award className={`w-6 h-6 mx-auto mb-2 ${
+                          priority === 'rewards' ? 'text-indigo-600' : 'text-gray-400'
+                        }`} />
+                        <p className={`text-sm font-medium ${
+                          priority === 'rewards' ? 'text-indigo-900' : 'text-gray-600'
+                        }`}>
+                          Max Rewards
+                        </p>
+                      </button>
+
+                      <button
+                        onClick={() => setPriority('safety')}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          priority === 'safety'
+                            ? 'border-green-600 bg-green-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <CheckCircle className={`w-6 h-6 mx-auto mb-2 ${
+                          priority === 'safety' ? 'text-green-600' : 'text-gray-400'
+                        }`} />
+                        <p className={`text-sm font-medium ${
+                          priority === 'safety' ? 'text-green-900' : 'text-gray-600'
+                        }`}>
+                          Safety First
+                        </p>
+                      </button>
+
+                      <button
+                        onClick={() => setPriority('balance')}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          priority === 'balance'
+                            ? 'border-purple-600 bg-purple-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <TrendingUp className={`w-6 h-6 mx-auto mb-2 ${
+                          priority === 'balance' ? 'text-purple-600' : 'text-gray-400'
+                        }`} />
+                        <p className={`text-sm font-medium ${
+                          priority === 'balance' ? 'text-purple-900' : 'text-gray-600'
+                        }`}>
+                          Balanced
+                        </p>
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2 text-center">
+                      {priority === 'rewards' && 'Card with highest historical spend in this category'}
+                      {priority === 'safety' && 'Card with lowest current utilization'}
+                      {priority === 'balance' && 'Best combination of rewards history and safe utilization'}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={getRecommendation}
+                    className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                  >
+                    Get Recommendation →
+                  </button>
+                </div>
+              </>
             ) : (
               <div className="space-y-6">
                 <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl border-2 border-indigo-200">
