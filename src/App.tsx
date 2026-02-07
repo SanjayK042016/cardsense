@@ -1,43 +1,18 @@
 import { Upload, CreditCard, TrendingUp, Award, AlertTriangle, X, CheckCircle, Zap, FileText, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { parseCreditCardStatement } from './utils/pdfParser';
+import { analyzeStatement, CardAnalysis } from './utils/cardAnalyzer';
 
 // Types
-interface MonthlyData {
-  month: string;
-  spend: number;
-  utilization: number;
-  rewards: number;
-}
-
-interface CategorySpend {
-  category: string;
-  amount: number;
-  percentage: number;
-  color: string;
-}
-
-interface CardData {
-  id: string;
-  name: string;
-  limit: number;
-  annualFee: number;
-  currentUtilization: number;
-  lastMonthSpend: number;
-  rewardsEarned: number;
-  healthScore: number;
-  monthlyData: MonthlyData[];
-  categorySpend: CategorySpend[];
-  insights: string[];
-}
-
 interface UploadedFile {
+  file: File;
   name: string;
   size: number;
   type: string;
 }
 
-// Mock Data
-const mockCards: CardData[] = [
+// Mock Data (fallback for demo mode)
+const mockCards: CardAnalysis[] = [
   {
     id: 'card-1',
     name: 'HDFC Regalia',
@@ -48,11 +23,6 @@ const mockCards: CardData[] = [
     rewardsEarned: 980,
     healthScore: 85,
     monthlyData: [
-      { month: 'Aug', spend: 45000, utilization: 22.5, rewards: 900 },
-      { month: 'Sep', spend: 52000, utilization: 26.0, rewards: 1040 },
-      { month: 'Oct', spend: 48000, utilization: 24.0, rewards: 960 },
-      { month: 'Nov', spend: 51000, utilization: 25.5, rewards: 1020 },
-      { month: 'Dec', spend: 55000, utilization: 27.5, rewards: 1100 },
       { month: 'Jan', spend: 49000, utilization: 24.5, rewards: 980 },
     ],
     categorySpend: [
@@ -63,10 +33,10 @@ const mockCards: CardData[] = [
       { category: 'Others', amount: 4000, percentage: 8.2, color: '#10B981' },
     ],
     insights: [
-      'Stable usage pattern - low variance over 6 months',
-      'Excellent rewards rate of 2% across all categories',
+      'Stable usage pattern - low variance',
+      'Excellent rewards rate of 2%',
       'Annual fee recovered within 3 months',
-      'Safe utilization buffer maintained consistently',
+      'Safe utilization buffer maintained',
     ]
   },
   {
@@ -79,11 +49,6 @@ const mockCards: CardData[] = [
     rewardsEarned: 5050,
     healthScore: 62,
     monthlyData: [
-      { month: 'Aug', spend: 85000, utilization: 56.7, rewards: 4250 },
-      { month: 'Sep', spend: 92000, utilization: 61.3, rewards: 4600 },
-      { month: 'Oct', spend: 125000, utilization: 83.3, rewards: 6250 },
-      { month: 'Nov', spend: 78000, utilization: 52.0, rewards: 3900 },
-      { month: 'Dec', spend: 95000, utilization: 63.3, rewards: 4750 },
       { month: 'Jan', spend: 101000, utilization: 67.3, rewards: 5050 },
     ],
     categorySpend: [
@@ -94,9 +59,9 @@ const mockCards: CardData[] = [
       { category: 'Others', amount: 5000, percentage: 5.0, color: '#10B981' },
     ],
     insights: [
-      'High utilization in Oct (83%) - consider spreading spend',
+      'High utilization - consider spreading spend',
       'Excellent 5% rewards on online shopping',
-      'Utilization trend showing upward pattern - monitor closely',
+      'Utilization trend showing upward pattern',
       'Annual fee recovered in first month',
     ]
   }
@@ -105,15 +70,15 @@ const mockCards: CardData[] = [
 function App() {
   const [step, setStep] = useState<'welcome' | 'upload' | 'processing' | 'dashboard'>('welcome');
   const [progress, setProgress] = useState(0);
-  const [selectedCard, setSelectedCard] = useState<CardData | null>(null);
+  const [selectedCard, setSelectedCard] = useState<CardAnalysis | null>(null);
   const [showRecommender, setShowRecommender] = useState(false);
   const [merchantType, setMerchantType] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [priority, setPriority] = useState<'rewards' | 'safety' | 'balance'>('balance');
   const [recommendation, setRecommendation] = useState<{
-    card: CardData;
+    card: CardAnalysis;
     reasoning: string[];
-    alternatives: Array<{ card: CardData; reason: string }>;
+    alternatives: Array<{ card: CardAnalysis; reason: string }>;
   } | null>(null);
 
   // Upload state
@@ -127,40 +92,92 @@ function App() {
     card3: null,
   });
 
-  const handleFileUpload = (cardSlot: 'card1' | 'card2' | 'card3') => {
-    // Simulate file upload
-    const mockFile: UploadedFile = {
-      name: `Statement_${cardSlot}.pdf`,
-      size: Math.floor(Math.random() * 2000000) + 500000,
-      type: 'application/pdf'
-    };
-    setUploadedFiles(prev => ({ ...prev, [cardSlot]: mockFile }));
+  // Analyzed cards
+  const [analyzedCards, setAnalyzedCards] = useState<CardAnalysis[]>([]);
+  const [useDemoMode, setUseDemoMode] = useState(false);
+
+  const handleFileSelect = (cardSlot: 'card1' | 'card2' | 'card3', event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      const uploadedFile: UploadedFile = {
+        file,
+        name: file.name,
+        size: file.size,
+        type: file.type
+      };
+      setUploadedFiles(prev => ({ ...prev, [cardSlot]: uploadedFile }));
+    } else {
+      alert('Please upload a valid PDF file');
+    }
   };
 
   const removeFile = (cardSlot: 'card1' | 'card2' | 'card3') => {
     setUploadedFiles(prev => ({ ...prev, [cardSlot]: null }));
   };
 
-  const handleAnalyze = () => {
-    const uploadedCount = Object.values(uploadedFiles).filter(f => f !== null).length;
-    if (uploadedCount === 0) {
+  const handleAnalyze = async () => {
+    const filesToAnalyze = Object.values(uploadedFiles).filter(f => f !== null);
+    
+    if (filesToAnalyze.length === 0) {
       alert('Please upload at least one card statement');
       return;
     }
     
     setStep('processing');
+    setProgress(0);
+    
+    try {
+      const analyzed: CardAnalysis[] = [];
+      
+      for (let i = 0; i < filesToAnalyze.length; i++) {
+        const file = filesToAnalyze[i]!.file;
+        
+        // Update progress
+        setProgress(((i + 1) / filesToAnalyze.length) * 100);
+        
+        // Parse PDF
+        const statement = await parseCreditCardStatement(file);
+        
+        // Analyze statement
+        const analysis = analyzeStatement(statement, `card-${i + 1}`);
+        analyzed.push(analysis);
+      }
+      
+      setAnalyzedCards(analyzed);
+      setUseDemoMode(false);
+      
+      setTimeout(() => {
+        setStep('dashboard');
+      }, 500);
+      
+    } catch (error) {
+      console.error('Analysis error:', error);
+      alert('Error analyzing PDFs. Using demo mode instead.');
+      setAnalyzedCards(mockCards);
+      setUseDemoMode(true);
+      setTimeout(() => setStep('dashboard'), 500);
+    }
+  };
+
+  const handleDemoMode = () => {
+    setStep('processing');
+    setUseDemoMode(true);
+    
     let currentProgress = 0;
     const interval = setInterval(() => {
       currentProgress += 10;
       setProgress(currentProgress);
       if (currentProgress >= 100) {
         clearInterval(interval);
+        setAnalyzedCards(mockCards);
         setTimeout(() => setStep('dashboard'), 500);
       }
     }, 300);
   };
 
   const getRecommendation = () => {
+    const cards = useDemoMode ? mockCards : analyzedCards;
+    
     if (!merchantType || !amount) {
       alert('Please fill in all fields');
       return;
@@ -168,7 +185,7 @@ function App() {
 
     const amountNum = parseFloat(amount);
     
-    const availableCards = mockCards.filter(card => {
+    const availableCards = cards.filter(card => {
       const newUtilization = ((card.limit * card.currentUtilization / 100) + amountNum) / card.limit * 100;
       return newUtilization < 80;
     });
@@ -178,9 +195,9 @@ function App() {
       return;
     }
 
-    let recommendedCard: CardData;
+    let recommendedCard: CardAnalysis;
     let reasoning: string[] = [];
-    let alternatives: Array<{ card: CardData; reason: string }> = [];
+    let alternatives: Array<{ card: CardAnalysis; reason: string }> = [];
 
     const categoryMatch = availableCards.map(card => {
       const categorySpend = card.categorySpend.find(c => 
@@ -295,7 +312,7 @@ function App() {
               <div className="text-2xl">📊</div>
               <div>
                 <h3 className="font-semibold text-gray-800">Understand Your Usage Patterns</h3>
-                <p className="text-gray-600 text-sm">See which cards create value and which don't</p>
+                <p className="text-gray-600 text-sm">Upload PDFs and see which cards create value</p>
               </div>
             </div>
             
@@ -303,7 +320,7 @@ function App() {
               <div className="text-2xl">💡</div>
               <div>
                 <h3 className="font-semibold text-gray-800">Smart Recommendations</h3>
-                <p className="text-gray-600 text-sm">Know which card to use for every payment</p>
+                <p className="text-gray-600 text-sm">AI-powered advice on which card to use</p>
               </div>
             </div>
             
@@ -311,7 +328,7 @@ function App() {
               <div className="text-2xl">🔒</div>
               <div>
                 <h3 className="font-semibold text-gray-800">Privacy First</h3>
-                <p className="text-gray-600 text-sm">Your data stays with you, processed locally</p>
+                <p className="text-gray-600 text-sm">All processing happens in your browser</p>
               </div>
             </div>
           </div>
@@ -324,14 +341,14 @@ function App() {
           </button>
           
           <p className="text-xs text-gray-500 text-center mt-4">
-            You'll need credit card statements from the last 12+ months
+            Upload credit card statements (PDF) from the last 12+ months
           </p>
         </div>
       </div>
     );
   }
 
-  // Upload Screen - REDESIGNED
+  // Upload Screen
   if (step === 'upload') {
     const uploadedCount = Object.values(uploadedFiles).filter(f => f !== null).length;
     const canAnalyze = uploadedCount > 0;
@@ -351,7 +368,7 @@ function App() {
           <div className="bg-white rounded-2xl shadow-2xl p-8">
             <div className="text-center mb-8">
               <h2 className="text-3xl font-bold text-gray-800 mb-2">Upload Your Card Statements</h2>
-              <p className="text-gray-600">Upload statements for up to 3 cards • PDF or CSV • 12+ months</p>
+              <p className="text-gray-600">Upload PDF statements for up to 3 cards • 12+ months recommended</p>
             </div>
 
             {/* Progress Indicator */}
@@ -385,165 +402,90 @@ function App() {
 
             {/* Card Upload Slots */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              {/* Card 1 */}
-              <div className="relative">
-                <div className={`border-2 border-dashed rounded-xl p-6 transition-all ${
-                  uploadedFiles.card1 
-                    ? 'border-green-400 bg-green-50' 
-                    : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer'
-                }`}
-                onClick={() => !uploadedFiles.card1 && handleFileUpload('card1')}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-indigo-600" />
-                      <span className="font-semibold text-gray-700">Card 1</span>
-                    </div>
-                    {uploadedFiles.card1 && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFile('card1');
-                        }}
-                        className="p-1 hover:bg-red-100 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </button>
-                    )}
-                  </div>
-
-                  {!uploadedFiles.card1 ? (
-                    <div className="text-center">
-                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600 mb-2">Click to upload</p>
-                      <span className="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-medium">
-                        Choose File
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <FileText className="w-12 h-12 text-green-600 mx-auto mb-2" />
-                      <p className="text-sm font-medium text-gray-800 mb-1 truncate">{uploadedFiles.card1.name}</p>
-                      <p className="text-xs text-gray-500">{formatFileSize(uploadedFiles.card1.size)}</p>
-                      <div className="mt-2 flex items-center justify-center gap-1">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                        <span className="text-xs text-green-600 font-medium">Ready</span>
+              {(['card1', 'card2', 'card3'] as const).map((slot, index) => (
+                <div key={slot} className="relative">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => handleFileSelect(slot, e)}
+                    className="hidden"
+                    id={`file-${slot}`}
+                  />
+                  <label
+                    htmlFor={uploadedFiles[slot] ? undefined : `file-${slot}`}
+                    className={`block border-2 border-dashed rounded-xl p-6 transition-all ${
+                      uploadedFiles[slot] 
+                        ? 'border-green-400 bg-green-50' 
+                        : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className={`w-5 h-5 ${
+                          index === 0 ? 'text-indigo-600' :
+                          index === 1 ? 'text-purple-600' : 'text-green-600'
+                        }`} />
+                        <span className="font-semibold text-gray-700">Card {index + 1}</span>
                       </div>
+                      {uploadedFiles[slot] && (
+                        <button 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            removeFile(slot);
+                          }}
+                          className="p-1 hover:bg-red-100 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        </button>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Card 2 */}
-              <div className="relative">
-                <div className={`border-2 border-dashed rounded-xl p-6 transition-all ${
-                  uploadedFiles.card2 
-                    ? 'border-green-400 bg-green-50' 
-                    : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer'
-                }`}
-                onClick={() => !uploadedFiles.card2 && handleFileUpload('card2')}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-purple-600" />
-                      <span className="font-semibold text-gray-700">Card 2</span>
-                    </div>
-                    {uploadedFiles.card2 && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFile('card2');
-                        }}
-                        className="p-1 hover:bg-red-100 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </button>
-                    )}
-                  </div>
-
-                  {!uploadedFiles.card2 ? (
-                    <div className="text-center">
-                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600 mb-2">Click to upload</p>
-                      <span className="inline-block bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-medium">
-                        Choose File
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <FileText className="w-12 h-12 text-green-600 mx-auto mb-2" />
-                      <p className="text-sm font-medium text-gray-800 mb-1 truncate">{uploadedFiles.card2.name}</p>
-                      <p className="text-xs text-gray-500">{formatFileSize(uploadedFiles.card2.size)}</p>
-                      <div className="mt-2 flex items-center justify-center gap-1">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                        <span className="text-xs text-green-600 font-medium">Ready</span>
+                    {!uploadedFiles[slot] ? (
+                      <div className="text-center">
+                        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600 mb-2">Click to upload PDF</p>
+                        <span className={`inline-block text-white px-4 py-2 rounded-lg text-xs font-medium ${
+                          index === 0 ? 'bg-indigo-600' :
+                          index === 1 ? 'bg-purple-600' : 'bg-green-600'
+                        }`}>
+                          Choose File
+                        </span>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Card 3 */}
-              <div className="relative">
-                <div className={`border-2 border-dashed rounded-xl p-6 transition-all ${
-                  uploadedFiles.card3 
-                    ? 'border-green-400 bg-green-50' 
-                    : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer'
-                }`}
-                onClick={() => !uploadedFiles.card3 && handleFileUpload('card3')}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-green-600" />
-                      <span className="font-semibold text-gray-700">Card 3</span>
-                    </div>
-                    {uploadedFiles.card3 && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFile('card3');
-                        }}
-                        className="p-1 hover:bg-red-100 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </button>
-                    )}
-                  </div>
-
-                  {!uploadedFiles.card3 ? (
-                    <div className="text-center">
-                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600 mb-2">Click to upload</p>
-                      <span className="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-medium">
-                        Choose File
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <FileText className="w-12 h-12 text-green-600 mx-auto mb-2" />
-                      <p className="text-sm font-medium text-gray-800 mb-1 truncate">{uploadedFiles.card3.name}</p>
-                      <p className="text-xs text-gray-500">{formatFileSize(uploadedFiles.card3.size)}</p>
-                      <div className="mt-2 flex items-center justify-center gap-1">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                        <span className="text-xs text-green-600 font-medium">Ready</span>
+                    ) : (
+                      <div className="text-center">
+                        <FileText className="w-12 h-12 text-green-600 mx-auto mb-2" />
+                        <p className="text-sm font-medium text-gray-800 mb-1 truncate">{uploadedFiles[slot].name}</p>
+                        <p className="text-xs text-gray-500">{formatFileSize(uploadedFiles[slot].size)}</p>
+                        <div className="mt-2 flex items-center justify-center gap-1">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                          <span className="text-xs text-green-600 font-medium">Ready</span>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </label>
                 </div>
-              </div>
+              ))}
             </div>
 
             {/* Analyze Button */}
             <button
               onClick={handleAnalyze}
               disabled={!canAnalyze}
-              className={`w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg ${
+              className={`w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg mb-3 ${
                 canAnalyze
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-xl cursor-pointer'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
             >
               {canAnalyze ? `Analyze ${uploadedCount} Card${uploadedCount > 1 ? 's' : ''} →` : 'Upload at least 1 card to continue'}
+            </button>
+
+            {/* Demo Mode Button */}
+            <button
+              onClick={handleDemoMode}
+              className="w-full py-3 rounded-xl font-medium text-indigo-600 border-2 border-indigo-600 hover:bg-indigo-50 transition-all"
+            >
+              Try Demo Mode Instead
             </button>
 
             {/* Instructions */}
@@ -563,7 +505,7 @@ function App() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-600 mt-0.5">•</span>
-                  <span>Download last 12-36 months as PDF or CSV</span>
+                  <span>Download last 12-36 months as PDF</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-600 mt-0.5">•</span>
@@ -585,8 +527,12 @@ function App() {
           <div className="mb-6">
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Processing Your Statements...</h2>
-          <p className="text-gray-600 mb-6">Analyzing your data</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            {useDemoMode ? 'Loading Demo Data...' : 'Analyzing Your Statements...'}
+          </h2>
+          <p className="text-gray-600 mb-6">
+            {useDemoMode ? 'Preparing sample insights' : 'Extracting transactions and calculating metrics'}
+          </p>
           
           <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
             <div 
@@ -600,13 +546,13 @@ function App() {
               <div className="w-5 h-5 bg-current rounded-full flex items-center justify-center">
                 {progress > 30 && <span className="text-white text-xs">✓</span>}
               </div>
-              <span className="text-sm">Parsing statements...</span>
+              <span className="text-sm">Parsing PDF statements...</span>
             </div>
             <div className={`flex items-center gap-2 ${progress > 60 ? 'text-green-600' : 'text-gray-400'}`}>
               <div className="w-5 h-5 bg-current rounded-full flex items-center justify-center">
                 {progress > 60 && <span className="text-white text-xs">✓</span>}
               </div>
-              <span className="text-sm">Analyzing patterns...</span>
+              <span className="text-sm">Categorizing transactions...</span>
             </div>
             <div className={`flex items-center gap-2 ${progress > 90 ? 'text-green-600' : 'text-gray-400'}`}>
               <div className="w-5 h-5 bg-current rounded-full flex items-center justify-center">
@@ -626,7 +572,7 @@ function App() {
     const avgUtilization = card.monthlyData.reduce((sum, m) => sum + m.utilization, 0) / card.monthlyData.length;
     const totalRewards = card.monthlyData.reduce((sum, m) => sum + m.rewards, 0);
     const totalSpend = card.monthlyData.reduce((sum, m) => sum + m.spend, 0);
-    const effectiveRate = (totalRewards / totalSpend) * 100;
+    const effectiveRate = totalSpend > 0 ? (totalRewards / totalSpend) * 100 : 0;
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -708,7 +654,7 @@ function App() {
                   <div key={cat.category}>
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-gray-700">{cat.category}</span>
-                      <span className="font-medium text-gray-900">₹{(cat.amount / 1000).toFixed(1)}K ({cat.percentage}%)</span>
+                      <span className="font-medium text-gray-900">₹{(cat.amount / 1000).toFixed(1)}K ({cat.percentage.toFixed(1)}%)</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
@@ -736,39 +682,6 @@ function App() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Breakdown</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Month</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Spend</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Utilization</th>
-                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Rewards</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {card.monthlyData.map((month, idx) => (
-                      <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-4 text-sm text-gray-900">{month.month}</td>
-                        <td className="py-3 px-4 text-sm text-right text-gray-900">₹{(month.spend / 1000).toFixed(0)}K</td>
-                        <td className="py-3 px-4 text-sm text-right">
-                          <span className={`font-medium ${
-                            month.utilization > 70 ? 'text-red-600' : 
-                            month.utilization > 50 ? 'text-yellow-600' : 'text-green-600'
-                          }`}>
-                            {month.utilization.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-right text-green-600 font-medium">₹{month.rewards}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
           </div>
         </div>
       </div>
@@ -776,13 +689,17 @@ function App() {
   }
 
   // Dashboard
+  const displayCards = useDemoMode ? mockCards : analyzedCards;
+
   return (
     <>
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-6xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Card Intelligence</h1>
-            <p className="text-gray-600">Based on 6 months of detailed analysis (Demo)</p>
+            <p className="text-gray-600">
+              {useDemoMode ? 'Demo Mode - Sample Data' : `Analysis from ${displayCards.length} card${displayCards.length > 1 ? 's' : ''}`}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -793,7 +710,7 @@ function App() {
                 </div>
                 <h3 className="font-semibold text-gray-700">Total Cards</h3>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{mockCards.length}</p>
+              <p className="text-3xl font-bold text-gray-900">{displayCards.length}</p>
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -803,7 +720,9 @@ function App() {
                 </div>
                 <h3 className="font-semibold text-gray-700">Avg Health Score</h3>
               </div>
-              <p className="text-3xl font-bold text-gray-900">74</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {Math.round(displayCards.reduce((sum, c) => sum + c.healthScore, 0) / displayCards.length)}
+              </p>
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -811,21 +730,23 @@ function App() {
                 <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                   <CreditCard className="w-5 h-5 text-purple-600" />
                 </div>
-                <h3 className="font-semibold text-gray-700">Data Period</h3>
+                <h3 className="font-semibold text-gray-700">Total Spend</h3>
               </div>
-              <p className="text-3xl font-bold text-gray-900">6m</p>
+              <p className="text-3xl font-bold text-gray-900">
+                ₹{(displayCards.reduce((sum, c) => sum + c.lastMonthSpend, 0) / 1000).toFixed(0)}K
+              </p>
             </div>
           </div>
 
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Your Cards</h2>
             
-            {mockCards.map((card) => (
+            {displayCards.map((card) => (
               <div key={card.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">{card.name}</h3>
-                    <p className="text-sm text-gray-500">Limit: ₹{(card.limit / 1000).toFixed(0)}K • Fee: ₹{card.annualFee}</p>
+                    <p className="text-sm text-gray-500">Limit: ₹{(card.limit / 1000).toFixed(0)}K</p>
                   </div>
                   <div className="text-right">
                     <div className={`text-2xl font-bold ${
@@ -872,7 +793,11 @@ function App() {
           </div>
 
           <button
-            onClick={() => setStep('welcome')}
+            onClick={() => {
+              setStep('welcome');
+              setUploadedFiles({ card1: null, card2: null, card3: null });
+              setAnalyzedCards([]);
+            }}
             className="mt-8 text-indigo-600 hover:text-indigo-700 font-medium"
           >
             ← Start Over
@@ -890,7 +815,7 @@ function App() {
         </div>
       </div>
 
-      {/* Recommender Modal */}
+      {/* Recommender Modal - Same as before */}
       {showRecommender && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto">
@@ -914,7 +839,7 @@ function App() {
               <>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                   <p className="text-sm text-blue-900">
-                    <strong>How it works:</strong> Based on your <strong>last 6 months</strong> of actual spending patterns, 
+                    <strong>How it works:</strong> Based on your actual spending patterns, 
                     we recommend the best card for this specific purchase.
                   </p>
                 </div>
@@ -939,7 +864,7 @@ function App() {
                       <option value="others">📦 Others</option>
                     </select>
                     <p className="text-xs text-gray-500 mt-2">
-                      💡 We analyze your past 6 months of spending in each category
+                      💡 We analyze your actual spending history in each category
                     </p>
                   </div>
 
