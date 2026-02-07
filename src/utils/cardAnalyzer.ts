@@ -31,7 +31,6 @@ export interface CardAnalysis {
 export function analyzeStatement(statement: ParsedStatement, cardId: string): CardAnalysis {
   const { transactions, totalSpend, creditLimit } = statement;
   
-  // Calculate category spending
   const categoryTotals: Record<string, number> = {};
   transactions.forEach((t: Transaction) => {
     const category = t.category || 'Others';
@@ -48,20 +47,12 @@ export function analyzeStatement(statement: ParsedStatement, cardId: string): Ca
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
   
-  // Calculate utilization
   const effectiveLimit = creditLimit || 100000;
   const currentUtilization = (totalSpend / effectiveLimit) * 100;
-  
-  // Calculate health score
   const healthScore = calculateHealthScore(currentUtilization, transactions);
-  
-  // Generate insights
   const insights = generateInsights(categorySpend, currentUtilization, transactions);
-  
-  // Calculate rewards (1% for now)
   const rewardsEarned = Math.floor(totalSpend * 0.01);
   
-  // Generate mock monthly data (we only have current month from PDF)
   const monthlyData: MonthlyData[] = [
     { month: 'Jan', spend: totalSpend, utilization: currentUtilization, rewards: rewardsEarned }
   ];
