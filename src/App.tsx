@@ -1,35 +1,13 @@
 import { Upload, CreditCard, TrendingUp, Award, AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
-
-// Mock data for demo
-const mockCards = [
-  {
-    id: 'card-1',
-    name: 'HDFC Regalia',
-    limit: 200000,
-    annualFee: 2500,
-    currentUtilization: 24.5,
-    lastMonthSpend: 49000,
-    rewardsEarned: 980,
-    healthScore: 85
-  },
-  {
-    id: 'card-2',
-    name: 'SBI SimplyCLICK',
-    limit: 150000,
-    annualFee: 499,
-    currentUtilization: 67.3,
-    lastMonthSpend: 101000,
-    rewardsEarned: 5050,
-    healthScore: 62
-  }
-];
+import { mockCardsDetailed, CardData } from './data/mockData';
+import DetailedCardView from './components/DetailedCardView';
 
 function App() {
   const [step, setStep] = useState<'welcome' | 'upload' | 'processing' | 'dashboard'>('welcome');
   const [progress, setProgress] = useState(0);
+  const [selectedCard, setSelectedCard] = useState<CardData | null>(null);
 
-  // Simulate processing
   const handleUpload = () => {
     setStep('processing');
     let currentProgress = 0;
@@ -43,7 +21,6 @@ function App() {
     }, 300);
   };
 
-  // Welcome Screen
   if (step === 'welcome') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -99,7 +76,6 @@ function App() {
     );
   }
 
-  // Upload Screen
   if (step === 'upload') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -148,7 +124,6 @@ function App() {
     );
   }
 
-  // Processing Screen
   if (step === 'processing') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -191,102 +166,117 @@ function App() {
     );
   }
 
-  // Dashboard Screen
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Card Intelligence</h1>
-          <p className="text-gray-600">Based on 12 months of data (Demo)</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-green-600" />
-              </div>
-              <h3 className="font-semibold text-gray-700">Total Cards</h3>
-            </div>
-            <p className="text-3xl font-bold text-gray-900">{mockCards.length}</p>
+    <>
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Card Intelligence</h1>
+            <p className="text-gray-600">Based on 6 months of detailed analysis (Demo)</p>
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Award className="w-5 h-5 text-blue-600" />
-              </div>
-              <h3 className="font-semibold text-gray-700">Avg Health Score</h3>
-            </div>
-            <p className="text-3xl font-bold text-gray-900">74</p>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <CreditCard className="w-5 h-5 text-purple-600" />
-              </div>
-              <h3 className="font-semibold text-gray-700">Data Period</h3>
-            </div>
-            <p className="text-3xl font-bold text-gray-900">12m</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Your Cards</h2>
-          
-          {mockCards.map((card) => (
-            <div key={card.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">{card.name}</h3>
-                  <p className="text-sm text-gray-500">Limit: ₹{(card.limit / 1000).toFixed(0)}K • Fee: ₹{card.annualFee}</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-green-600" />
                 </div>
-                <div className="text-right">
-                  <div className={`text-2xl font-bold ${
-                    card.healthScore > 75 ? 'text-green-600' : 
-                    card.healthScore > 50 ? 'text-yellow-600' : 
-                    'text-red-600'
-                  }`}>
-                    {card.healthScore}
+                <h3 className="font-semibold text-gray-700">Total Cards</h3>
+              </div>
+              <p className="text-3xl font-bold text-gray-900">{mockCardsDetailed.length}</p>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Award className="w-5 h-5 text-blue-600" />
+                </div>
+                <h3 className="font-semibold text-gray-700">Avg Health Score</h3>
+              </div>
+              <p className="text-3xl font-bold text-gray-900">74</p>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-purple-600" />
+                </div>
+                <h3 className="font-semibold text-gray-700">Data Period</h3>
+              </div>
+              <p className="text-3xl font-bold text-gray-900">6m</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Your Cards</h2>
+            
+            {mockCardsDetailed.map((card) => (
+              <div key={card.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">{card.name}</h3>
+                    <p className="text-sm text-gray-500">Limit: ₹{(card.limit / 1000).toFixed(0)}K • Fee: ₹{card.annualFee}</p>
                   </div>
-                  <p className="text-xs text-gray-500">Health Score</p>
+                  <div className="text-right">
+                    <div className={`text-2xl font-bold ${
+                      card.healthScore > 75 ? 'text-green-600' : 
+                      card.healthScore > 50 ? 'text-yellow-600' : 
+                      'text-red-600'
+                    }`}>
+                      {card.healthScore}
+                    </div>
+                    <p className="text-xs text-gray-500">Health Score</p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Current Utilization</p>
-                  <p className="text-lg font-semibold text-gray-900">{card.currentUtilization}%</p>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Current Utilization</p>
+                    <p className="text-lg font-semibold text-gray-900">{card.currentUtilization}%</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Last Month Spend</p>
+                    <p className="text-lg font-semibold text-gray-900">₹{(card.lastMonthSpend / 1000).toFixed(0)}K</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Rewards Earned</p>
+                    <p className="text-lg font-semibold text-green-600">₹{card.rewardsEarned}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500">Last Month Spend</p>
-                  <p className="text-lg font-semibold text-gray-900">₹{(card.lastMonthSpend / 1000).toFixed(0)}K</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Rewards Earned</p>
-                  <p className="text-lg font-semibold text-green-600">₹{card.rewardsEarned}</p>
-                </div>
-              </div>
 
-              {card.healthScore < 70 && (
-                <div className="mt-4 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
-                  <p className="text-sm text-yellow-800">High utilization detected - consider reducing usage or increasing limit</p>
-                </div>
-              )}
-            </div>
-          ))}
+                {card.healthScore < 70 && (
+                  <div className="mb-4 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
+                    <p className="text-sm text-yellow-800">High utilization detected - consider reducing usage or increasing limit</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setSelectedCard(card)}
+                  className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+                >
+                  View Detailed Analysis →
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => setStep('welcome')}
+            className="mt-8 text-indigo-600 hover:text-indigo-700 font-medium"
+          >
+            ← Start Over
+          </button>
         </div>
-
-        <button
-          onClick={() => setStep('welcome')}
-          className="mt-8 text-indigo-600 hover:text-indigo-700 font-medium"
-        >
-          ← Start Over
-        </button>
       </div>
-    </div>
+
+      {selectedCard && (
+        <DetailedCardView 
+          card={selectedCard} 
+          onClose={() => setSelectedCard(null)} 
+        />
+      )}
+    </>
   );
 }
 
