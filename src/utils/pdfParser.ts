@@ -1,150 +1,181 @@
-import { ParsedStatement, Transaction } from './pdfParser';
+import * as pdfjsLib from 'pdfjs-dist';
 
-export interface CategorySpend {
-  category: string;
+// Set worker path
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+}
+
+export interface Transaction {
+  date: string;
+  description: string;
   amount: number;
-  percentage: number;
-  color: string;
+  type: 'debit' | 'credit';
+  category?: string;
 }
 
-export interface MonthlyData {
-  month: string;
-  spend: number;
-  utilization: number;
-  rewards: number;
+export interface ParsedStatement {
+  cardName: string;
+  cardLastFour: string;
+  statementPeriod: string;
+  transactions: Transaction[];
+  totalSpend: number;
+  creditLimit?: number;
+  minimumDue?: number;
+  previousBalance?: number;
 }
 
-export interface CardAnalysis {
-  id: string;
-  name: string;
-  limit: number;
-  annualFee: number;
-  currentUtilization: number;
-  lastMonthSpend: number;
-  rewardsEarned: number;
-  healthScore: number;
-  categorySpend: CategorySpend[];
-  monthlyData: MonthlyData[];
-  insights: string[];
-}
-
-export function analyzeStatement(statement: ParsedStatement, cardId: string): CardAnalysis {
-  const { transactions, totalSpend, creditLimit } = statement;
+// Extract text from PDF
+export async function extractTextFromPDF(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   
-  // Calculate category spending
-  const categoryTotals: Record<string, number> = {};
-  transactions.forEach(t => {
-    const category = t.category || 'Others';
-    categoryTotals[category] = (categoryTotals[category] || 0) + t.amount;
-  });
+  let fullText = '';
   
-  const categorySpend: CategorySpend[] = Object.entries(categoryTotals)
-    .map(([category, amount]) => ({
-      category,
-      amount,
-      percentage: (amount / totalSpend) * 100,
-      color: getCategoryColor(category)
-    }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
-  
-  // Calculate utilization
-  const effectiveLimit = creditLimit || 100000;
-  const currentUtilization = (totalSpend / effectiveLimit) * 100;
-  
-  // Calculate health score
-  const healthScore = calculateHealthScore(currentUtilization, transactions);
-  
-  // Generate insights
-  const insights = generateInsights(categorySpend, currentUtilization, transactions);
-  
-  // Calculate rewards (1% for now)
-  const rewardsEarned = Math.floor(totalSpend * 0.01);
-  
-  // Generate mock monthly data (we only have current month from PDF)
-  const monthlyData: MonthlyData[] = [
-    { month: 'Jan', spend: totalSpend, utilization: currentUtilization, rewards: rewardsEarned }
-  ];
-  
-  return {
-    id: cardId,
-    name: statement.cardName,
-    limit: effectiveLimit,
-    annualFee: 0, // Can't extract from statement easily
-    currentUtilization: parseFloat(currentUtilization.toFixed(1)),
-    lastMonthSpend: totalSpend,
-    rewardsEarned,
-    healthScore,
-    categorySpend,
-    monthlyData,
-    insights
-  };
-}
-
-function calculateHealthScore(utilization: number, transactions: Transaction[]): number {
-  let score = 100;
-  
-  // Penalize high utilization
-  if (utilization > 80) score -= 30;
-  else if (utilization > 60) score -= 20;
-  else if (utilization > 40) score -= 10;
-  
-  // Penalize irregular spending
-  if (transactions.length > 0) {
-    const avgTransaction = transactions.reduce((sum, t) => sum + t.amount, 0) / transactions.length;
-    const largeTransactions = transactions.filter(t => t.amount > avgTransaction * 3).length;
-    if (largeTransactions > 5) score -= 10;
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .map((item: any) => item.str)
+      .join(' ');
+    fullText += pageText + '\n';
   }
   
-  // Reward consistent usage
-  if (transactions.length > 20 && transactions.length < 100) score += 5;
-  
-  return Math.max(0, Math.min(100, Math.round(score)));
+  return fullText;
 }
 
-function generateInsights(
-  categorySpend: CategorySpend[], 
-  utilization: number, 
-  transactions: Transaction[]
-): string[] {
-  const insights: string[] = [];
+// Parse transactions from text
+export function parseTransactions(text: string): Transaction[] {
+  const transactions: Transaction[] = [];
+  const lines = text.split('\n');
   
-  if (utilization > 70) {
-    insights.push(`High utilization at ${utilization.toFixed(1)}% - consider paying down balance`);
-  } else if (utilization < 30) {
-    insights.push(`Healthy utilization at ${utilization.toFixed(1)}% - plenty of credit buffer`);
+  const datePattern = /(\d{2}[\/\-]\d{2}[\/\-]\d{4}|\d{2}\s+[A-Z]{3}\s+\d{4})/i;
+  const amountPattern = /(?:Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)/i;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.length < 10) continue;
+    
+    const dateMatch = line.match(datePattern);
+    const amountMatch = line.match(amountPattern);
+    
+    if (dateMatch && amountMatch) {
+      const date = dateMatch[1];
+      const amountStr = amountMatch[1].replace(/,/g, '');
+      const amount = parseFloat(amountStr);
+      
+      const description = line
+        .replace(dateMatch[0], '')
+        .replace(amountMatch[0], '')
+        .trim()
+        .substring(0, 50);
+      
+      if (amount > 0 && description.length > 3) {
+        transactions.push({
+          date,
+          description,
+          amount,
+          type: 'debit',
+          category: categorizeTransaction(description)
+        });
+      }
+    }
   }
   
-  if (categorySpend.length > 0) {
-    const topCategory = categorySpend[0];
-    insights.push(`Highest spending in ${topCategory.category} (${topCategory.percentage.toFixed(1)}%)`);
-  }
-  
-  if (transactions.length > 50) {
-    insights.push(`Very active card with ${transactions.length} transactions`);
-  } else if (transactions.length < 10) {
-    insights.push(`Low usage with ${transactions.length} transactions`);
-  }
-  
-  const avgTransaction = transactions.length > 0 
-    ? transactions.reduce((sum, t) => sum + t.amount, 0) / transactions.length 
-    : 0;
-  if (avgTransaction > 5000) {
-    insights.push(`High-value transactions averaging ₹${avgTransaction.toFixed(0)}`);
-  }
-  
-  return insights.slice(0, 4);
+  return transactions;
 }
 
-function getCategoryColor(category: string): string {
-  const colors: Record<string, string> = {
-    'Dining': '#4F46E5',
-    'Shopping': '#7C3AED',
-    'Travel': '#EC4899',
-    'Groceries': '#F59E0B',
-    'Bills': '#10B981',
-    'Online Shopping': '#3B82F6',
-    'Others': '#6B7280'
-  };
-  return colors[category] || '#6B7280';
+// Simple categorization logic
+export function categorizeTransaction(description: string): string {
+  const desc = description.toLowerCase();
+  
+  if (desc.includes('restaurant') || desc.includes('cafe') || desc.includes('food') || 
+      desc.includes('zomato') || desc.includes('swiggy') || desc.includes('dominos') ||
+      desc.includes('mcdonald') || desc.includes('starbucks')) {
+    return 'Dining';
+  }
+  
+  if (desc.includes('amazon') || desc.includes('flipkart') || desc.includes('myntra') ||
+      desc.includes('shop') || desc.includes('store') || desc.includes('mall')) {
+    return 'Shopping';
+  }
+  
+  if (desc.includes('uber') || desc.includes('ola') || desc.includes('airline') ||
+      desc.includes('hotel') || desc.includes('booking') || desc.includes('makemytrip') ||
+      desc.includes('flight') || desc.includes('irctc')) {
+    return 'Travel';
+  }
+  
+  if (desc.includes('grofers') || desc.includes('bigbasket') || desc.includes('dmart') ||
+      desc.includes('reliance fresh') || desc.includes('grocery') || desc.includes('supermarket')) {
+    return 'Groceries';
+  }
+  
+  if (desc.includes('electricity') || desc.includes('water') || desc.includes('gas') ||
+      desc.includes('mobile') || desc.includes('recharge') || desc.includes('bill payment') ||
+      desc.includes('paytm') || desc.includes('phonepe')) {
+    return 'Bills';
+  }
+  
+  if (desc.includes('online') || desc.includes('e-commerce') || desc.includes('digital')) {
+    return 'Online Shopping';
+  }
+  
+  return 'Others';
+}
+
+// Extract card details
+export function extractCardDetails(text: string): Partial<ParsedStatement> {
+  const details: Partial<ParsedStatement> = {};
+  
+  const banks = ['HDFC', 'SBI', 'ICICI', 'AXIS', 'Kotak', 'Citi', 'American Express', 'AMEX'];
+  for (const bank of banks) {
+    if (text.toUpperCase().includes(bank.toUpperCase())) {
+      details.cardName = bank + ' Credit Card';
+      break;
+    }
+  }
+  
+  const cardPattern = /(?:card|account)\s*(?:number|no\.?)?\s*[:\-]?\s*[X*]{4,12}(\d{4})/i;
+  const cardMatch = text.match(cardPattern);
+  if (cardMatch) {
+    details.cardLastFour = cardMatch[1];
+  }
+  
+  const limitPattern = /(?:credit\s*limit|total\s*limit)[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([\d,]+)/i;
+  const limitMatch = text.match(limitPattern);
+  if (limitMatch) {
+    details.creditLimit = parseFloat(limitMatch[1].replace(/,/g, ''));
+  }
+  
+  const minDuePattern = /(?:minimum\s*(?:amount\s*)?due|min\.?\s*due)[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([\d,]+)/i;
+  const minDueMatch = text.match(minDuePattern);
+  if (minDueMatch) {
+    details.minimumDue = parseFloat(minDueMatch[1].replace(/,/g, ''));
+  }
+  
+  return details;
+}
+
+// Main parser function
+export async function parseCreditCardStatement(file: File): Promise<ParsedStatement> {
+  try {
+    const text = await extractTextFromPDF(file);
+    const transactions = parseTransactions(text);
+    const cardDetails = extractCardDetails(text);
+    const totalSpend = transactions.reduce((sum, t) => sum + t.amount, 0);
+    
+    return {
+      cardName: cardDetails.cardName || 'Unknown Card',
+      cardLastFour: cardDetails.cardLastFour || '****',
+      statementPeriod: 'Last Month',
+      transactions,
+      totalSpend,
+      creditLimit: cardDetails.creditLimit,
+      minimumDue: cardDetails.minimumDue,
+      previousBalance: cardDetails.previousBalance
+    };
+  } catch (error) {
+    console.error('Error parsing PDF:', error);
+    throw new Error('Failed to parse credit card statement. Please ensure it\'s a valid PDF.');
+  }
 }
