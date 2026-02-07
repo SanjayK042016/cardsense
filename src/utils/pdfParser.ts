@@ -24,7 +24,6 @@ export interface ParsedStatement {
   previousBalance?: number;
 }
 
-// Extract text from PDF
 export async function extractTextFromPDF(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -43,7 +42,6 @@ export async function extractTextFromPDF(file: File): Promise<string> {
   return fullText;
 }
 
-// Parse transactions from text
 export function parseTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
@@ -84,7 +82,6 @@ export function parseTransactions(text: string): Transaction[] {
   return transactions;
 }
 
-// Simple categorization logic
 export function categorizeTransaction(description: string): string {
   const desc = description.toLowerCase();
   
@@ -123,7 +120,6 @@ export function categorizeTransaction(description: string): string {
   return 'Others';
 }
 
-// Extract card details
 export function extractCardDetails(text: string): Partial<ParsedStatement> {
   const details: Partial<ParsedStatement> = {};
   
@@ -156,7 +152,6 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   return details;
 }
 
-// Main parser function
 export async function parseCreditCardStatement(file: File): Promise<ParsedStatement> {
   try {
     const text = await extractTextFromPDF(file);
@@ -176,6 +171,6 @@ export async function parseCreditCardStatement(file: File): Promise<ParsedStatem
     };
   } catch (error) {
     console.error('Error parsing PDF:', error);
-    throw new Error('Failed to parse credit card statement. Please ensure it\'s a valid PDF.');
+    throw new Error('Failed to parse credit card statement. Please ensure it is a valid PDF.');
   }
 }
