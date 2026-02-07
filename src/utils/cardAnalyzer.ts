@@ -1,4 +1,4 @@
-import { ParsedStatement, Transaction } from './pdfParser';
+import type { ParsedStatement, Transaction } from './pdfParser';
 
 export interface CategorySpend {
   category: string;
@@ -33,7 +33,7 @@ export function analyzeStatement(statement: ParsedStatement, cardId: string): Ca
   
   // Calculate category spending
   const categoryTotals: Record<string, number> = {};
-  transactions.forEach(t => {
+  transactions.forEach((t: Transaction) => {
     const category = t.category || 'Others';
     categoryTotals[category] = (categoryTotals[category] || 0) + t.amount;
   });
@@ -70,7 +70,7 @@ export function analyzeStatement(statement: ParsedStatement, cardId: string): Ca
     id: cardId,
     name: statement.cardName,
     limit: effectiveLimit,
-    annualFee: 0, // Can't extract from statement easily
+    annualFee: 0,
     currentUtilization: parseFloat(currentUtilization.toFixed(1)),
     lastMonthSpend: totalSpend,
     rewardsEarned,
@@ -84,19 +84,16 @@ export function analyzeStatement(statement: ParsedStatement, cardId: string): Ca
 function calculateHealthScore(utilization: number, transactions: Transaction[]): number {
   let score = 100;
   
-  // Penalize high utilization
   if (utilization > 80) score -= 30;
   else if (utilization > 60) score -= 20;
   else if (utilization > 40) score -= 10;
   
-  // Penalize irregular spending
   if (transactions.length > 0) {
     const avgTransaction = transactions.reduce((sum, t) => sum + t.amount, 0) / transactions.length;
     const largeTransactions = transactions.filter(t => t.amount > avgTransaction * 3).length;
     if (largeTransactions > 5) score -= 10;
   }
   
-  // Reward consistent usage
   if (transactions.length > 20 && transactions.length < 100) score += 5;
   
   return Math.max(0, Math.min(100, Math.round(score)));
