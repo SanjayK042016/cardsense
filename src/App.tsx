@@ -1,7 +1,100 @@
-import { Upload, CreditCard, TrendingUp, Award, AlertTriangle } from 'lucide-react';
+import { Upload, CreditCard, TrendingUp, Award, AlertTriangle, X, CheckCircle } from 'lucide-react';
 import { useState } from 'react';
-import { mockCardsDetailed, CardData } from './data/mockData';
-import DetailedCardView from './components/DetailedCardView';
+
+// Types
+interface MonthlyData {
+  month: string;
+  spend: number;
+  utilization: number;
+  rewards: number;
+}
+
+interface CategorySpend {
+  category: string;
+  amount: number;
+  percentage: number;
+  color: string;
+}
+
+interface CardData {
+  id: string;
+  name: string;
+  limit: number;
+  annualFee: number;
+  currentUtilization: number;
+  lastMonthSpend: number;
+  rewardsEarned: number;
+  healthScore: number;
+  monthlyData: MonthlyData[];
+  categorySpend: CategorySpend[];
+  insights: string[];
+}
+
+// Mock Data
+const mockCards: CardData[] = [
+  {
+    id: 'card-1',
+    name: 'HDFC Regalia',
+    limit: 200000,
+    annualFee: 2500,
+    currentUtilization: 24.5,
+    lastMonthSpend: 49000,
+    rewardsEarned: 980,
+    healthScore: 85,
+    monthlyData: [
+      { month: 'Aug', spend: 45000, utilization: 22.5, rewards: 900 },
+      { month: 'Sep', spend: 52000, utilization: 26.0, rewards: 1040 },
+      { month: 'Oct', spend: 48000, utilization: 24.0, rewards: 960 },
+      { month: 'Nov', spend: 51000, utilization: 25.5, rewards: 1020 },
+      { month: 'Dec', spend: 55000, utilization: 27.5, rewards: 1100 },
+      { month: 'Jan', spend: 49000, utilization: 24.5, rewards: 980 },
+    ],
+    categorySpend: [
+      { category: 'Dining', amount: 15000, percentage: 30.6, color: '#4F46E5' },
+      { category: 'Shopping', amount: 12000, percentage: 24.5, color: '#7C3AED' },
+      { category: 'Travel', amount: 10000, percentage: 20.4, color: '#EC4899' },
+      { category: 'Groceries', amount: 8000, percentage: 16.3, color: '#F59E0B' },
+      { category: 'Others', amount: 4000, percentage: 8.2, color: '#10B981' },
+    ],
+    insights: [
+      'Stable usage pattern - low variance over 6 months',
+      'Excellent rewards rate of 2% across all categories',
+      'Annual fee recovered within 3 months',
+      'Safe utilization buffer maintained consistently',
+    ]
+  },
+  {
+    id: 'card-2',
+    name: 'SBI SimplyCLICK',
+    limit: 150000,
+    annualFee: 499,
+    currentUtilization: 67.3,
+    lastMonthSpend: 101000,
+    rewardsEarned: 5050,
+    healthScore: 62,
+    monthlyData: [
+      { month: 'Aug', spend: 85000, utilization: 56.7, rewards: 4250 },
+      { month: 'Sep', spend: 92000, utilization: 61.3, rewards: 4600 },
+      { month: 'Oct', spend: 125000, utilization: 83.3, rewards: 6250 },
+      { month: 'Nov', spend: 78000, utilization: 52.0, rewards: 3900 },
+      { month: 'Dec', spend: 95000, utilization: 63.3, rewards: 4750 },
+      { month: 'Jan', spend: 101000, utilization: 67.3, rewards: 5050 },
+    ],
+    categorySpend: [
+      { category: 'Online Shopping', amount: 45000, percentage: 44.6, color: '#4F46E5' },
+      { category: 'Bills', amount: 25000, percentage: 24.8, color: '#7C3AED' },
+      { category: 'Groceries', amount: 18000, percentage: 17.8, color: '#EC4899' },
+      { category: 'Dining', amount: 8000, percentage: 7.9, color: '#F59E0B' },
+      { category: 'Others', amount: 5000, percentage: 5.0, color: '#10B981' },
+    ],
+    insights: [
+      'High utilization in Oct (83%) - consider spreading spend',
+      'Excellent 5% rewards on online shopping',
+      'Utilization trend showing upward pattern - monitor closely',
+      'Annual fee recovered in first month',
+    ]
+  }
+];
 
 function App() {
   const [step, setStep] = useState<'welcome' | 'upload' | 'processing' | 'dashboard'>('welcome');
@@ -21,6 +114,7 @@ function App() {
     }, 300);
   };
 
+  // Welcome Screen
   if (step === 'welcome') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -76,6 +170,7 @@ function App() {
     );
   }
 
+  // Upload Screen
   if (step === 'upload') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -124,6 +219,7 @@ function App() {
     );
   }
 
+  // Processing Screen
   if (step === 'processing') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -166,117 +262,263 @@ function App() {
     );
   }
 
-  return (
-    <>
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Card Intelligence</h1>
-            <p className="text-gray-600">Based on 6 months of detailed analysis (Demo)</p>
-          </div>
+  // Dashboard Screen
+  const card = selectedCard;
+  if (card) {
+    const avgUtilization = card.monthlyData.reduce((sum, m) => sum + m.utilization, 0) / card.monthlyData.length;
+    const totalRewards = card.monthlyData.reduce((sum, m) => sum + m.rewards, 0);
+    const totalSpend = card.monthlyData.reduce((sum, m) => sum + m.spend, 0);
+    const effectiveRate = (totalRewards / totalSpend) * 100;
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-green-600" />
-                </div>
-                <h3 className="font-semibold text-gray-700">Total Cards</h3>
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="bg-gray-50 rounded-2xl max-w-6xl w-full my-8 max-h-[90vh] overflow-y-auto">
+          
+          <div className="bg-white p-6 rounded-t-2xl border-b border-gray-200 sticky top-0 z-10">
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">{card.name}</h2>
+                <p className="text-sm text-gray-500">Detailed Analysis</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{mockCardsDetailed.length}</p>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Award className="w-5 h-5 text-blue-600" />
-                </div>
-                <h3 className="font-semibold text-gray-700">Avg Health Score</h3>
-              </div>
-              <p className="text-3xl font-bold text-gray-900">74</p>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-purple-600" />
-                </div>
-                <h3 className="font-semibold text-gray-700">Data Period</h3>
-              </div>
-              <p className="text-3xl font-bold text-gray-900">6m</p>
+              <button 
+                onClick={() => setSelectedCard(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-600" />
+              </button>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Your Cards</h2>
+          <div className="p-6 space-y-6">
             
-            {mockCardsDetailed.map((card) => (
-              <div key={card.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">{card.name}</h3>
-                    <p className="text-sm text-gray-500">Limit: ₹{(card.limit / 1000).toFixed(0)}K • Fee: ₹{card.annualFee}</p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-indigo-600" />
                   </div>
-                  <div className="text-right">
-                    <div className={`text-2xl font-bold ${
+                  <span className="text-sm text-gray-600">Avg Utilization</span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{avgUtilization.toFixed(1)}%</p>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Award className="w-4 h-4 text-green-600" />
+                  </div>
+                  <span className="text-sm text-gray-600">Total Rewards</span>
+                </div>
+                <p className="text-2xl font-bold text-green-600">₹{totalRewards}</p>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <span className="text-sm text-gray-600">Effective Rate</span>
+                </div>
+                <p className="text-2xl font-bold text-purple-600">{effectiveRate.toFixed(2)}%</p>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                    card.healthScore > 75 ? 'bg-green-100' : 
+                    card.healthScore > 50 ? 'bg-yellow-100' : 'bg-red-100'
+                  }`}>
+                    <span className={`text-sm font-bold ${
                       card.healthScore > 75 ? 'text-green-600' : 
-                      card.healthScore > 50 ? 'text-yellow-600' : 
-                      'text-red-600'
+                      card.healthScore > 50 ? 'text-yellow-600' : 'text-red-600'
                     }`}>
                       {card.healthScore}
-                    </div>
-                    <p className="text-xs text-gray-500">Health Score</p>
+                    </span>
                   </div>
+                  <span className="text-sm text-gray-600">Health Score</span>
                 </div>
-
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Current Utilization</p>
-                    <p className="text-lg font-semibold text-gray-900">{card.currentUtilization}%</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Last Month Spend</p>
-                    <p className="text-lg font-semibold text-gray-900">₹{(card.lastMonthSpend / 1000).toFixed(0)}K</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Rewards Earned</p>
-                    <p className="text-lg font-semibold text-green-600">₹{card.rewardsEarned}</p>
-                  </div>
-                </div>
-
-                {card.healthScore < 70 && (
-                  <div className="mb-4 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
-                    <p className="text-sm text-yellow-800">High utilization detected - consider reducing usage or increasing limit</p>
-                  </div>
-                )}
-
-                <button
-                  onClick={() => setSelectedCard(card)}
-                  className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
-                >
-                  View Detailed Analysis →
-                </button>
+                <p className="text-sm text-gray-700">
+                  {card.healthScore > 75 ? 'Excellent' : card.healthScore > 50 ? 'Good' : 'Needs Attention'}
+                </p>
               </div>
-            ))}
-          </div>
+            </div>
 
-          <button
-            onClick={() => setStep('welcome')}
-            className="mt-8 text-indigo-600 hover:text-indigo-700 font-medium"
-          >
-            ← Start Over
-          </button>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Category Spending</h3>
+              <div className="space-y-3">
+                {card.categorySpend.map((cat) => (
+                  <div key={cat.category}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-700">{cat.category}</span>
+                      <span className="font-medium text-gray-900">₹{(cat.amount / 1000).toFixed(1)}K ({cat.percentage}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="h-2 rounded-full transition-all"
+                        style={{ width: `${cat.percentage}%`, backgroundColor: cat.color }}
+                      ></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-indigo-600" />
+                Key Insights
+              </h3>
+              <div className="space-y-3">
+                {card.insights.map((insight, idx) => (
+                  <div key={idx} className="flex items-start gap-3 p-3 bg-indigo-50 rounded-lg">
+                    <CheckCircle className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-gray-700">{insight}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Breakdown</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Month</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Spend</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Utilization</th>
+                      <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Rewards</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {card.monthlyData.map((month, idx) => (
+                      <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm text-gray-900">{month.month}</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-900">₹{(month.spend / 1000).toFixed(0)}K</td>
+                        <td className="py-3 px-4 text-sm text-right">
+                          <span className={`font-medium ${
+                            month.utilization > 70 ? 'text-red-600' : 
+                            month.utilization > 50 ? 'text-yellow-600' : 'text-green-600'
+                          }`}>
+                            {month.utilization.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-right text-green-600 font-medium">₹{month.rewards}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {selectedCard && (
-        <DetailedCardView 
-          card={selectedCard} 
-          onClose={() => setSelectedCard(null)} 
-        />
-      )}
-    </>
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Card Intelligence</h1>
+          <p className="text-gray-600">Based on 6 months of detailed analysis (Demo)</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-green-600" />
+              </div>
+              <h3 className="font-semibold text-gray-700">Total Cards</h3>
+            </div>
+            <p className="text-3xl font-bold text-gray-900">{mockCards.length}</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Award className="w-5 h-5 text-blue-600" />
+              </div>
+              <h3 className="font-semibold text-gray-700">Avg Health Score</h3>
+            </div>
+            <p className="text-3xl font-bold text-gray-900">74</p>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-purple-600" />
+              </div>
+              <h3 className="font-semibold text-gray-700">Data Period</h3>
+            </div>
+            <p className="text-3xl font-bold text-gray-900">6m</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Your Cards</h2>
+          
+          {mockCards.map((card) => (
+            <div key={card.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">{card.name}</h3>
+                  <p className="text-sm text-gray-500">Limit: ₹{(card.limit / 1000).toFixed(0)}K • Fee: ₹{card.annualFee}</p>
+                </div>
+                <div className="text-right">
+                  <div className={`text-2xl font-bold ${
+                    card.healthScore > 75 ? 'text-green-600' : 
+                    card.healthScore > 50 ? 'text-yellow-600' : 
+                    'text-red-600'
+                  }`}>
+                    {card.healthScore}
+                  </div>
+                  <p className="text-xs text-gray-500">Health Score</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                  <p className="text-sm text-gray-500">Current Utilization</p>
+                  <p className="text-lg font-semibold text-gray-900">{card.currentUtilization}%</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Last Month Spend</p>
+                  <p className="text-lg font-semibold text-gray-900">₹{(card.lastMonthSpend / 1000).toFixed(0)}K</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Rewards Earned</p>
+                  <p className="text-lg font-semibold text-green-600">₹{card.rewardsEarned}</p>
+                </div>
+              </div>
+
+              {card.healthScore < 70 && (
+                <div className="mb-4 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
+                  <p className="text-sm text-yellow-800">High utilization detected - consider reducing usage or increasing limit</p>
+                </div>
+              )}
+
+              <button
+                onClick={() => setSelectedCard(card)}
+                className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+              >
+                View Detailed Analysis →
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={() => setStep('welcome')}
+          className="mt-8 text-indigo-600 hover:text-indigo-700 font-medium"
+        >
+          ← Start Over
+        </button>
+      </div>
+    </div>
   );
 }
 
