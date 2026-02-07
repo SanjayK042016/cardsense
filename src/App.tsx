@@ -11,62 +11,6 @@ interface UploadedFile {
   type: string;
 }
 
-// Mock Data (fallback for demo mode)
-const mockCards: CardAnalysis[] = [
-  {
-    id: 'card-1',
-    name: 'HDFC Regalia',
-    limit: 200000,
-    annualFee: 2500,
-    currentUtilization: 24.5,
-    lastMonthSpend: 49000,
-    rewardsEarned: 980,
-    healthScore: 85,
-    monthlyData: [
-      { month: 'Jan', spend: 49000, utilization: 24.5, rewards: 980 },
-    ],
-    categorySpend: [
-      { category: 'Dining', amount: 15000, percentage: 30.6, color: '#4F46E5' },
-      { category: 'Shopping', amount: 12000, percentage: 24.5, color: '#7C3AED' },
-      { category: 'Travel', amount: 10000, percentage: 20.4, color: '#EC4899' },
-      { category: 'Groceries', amount: 8000, percentage: 16.3, color: '#F59E0B' },
-      { category: 'Others', amount: 4000, percentage: 8.2, color: '#10B981' },
-    ],
-    insights: [
-      'Stable usage pattern - low variance',
-      'Excellent rewards rate of 2%',
-      'Annual fee recovered within 3 months',
-      'Safe utilization buffer maintained',
-    ]
-  },
-  {
-    id: 'card-2',
-    name: 'SBI SimplyCLICK',
-    limit: 150000,
-    annualFee: 499,
-    currentUtilization: 67.3,
-    lastMonthSpend: 101000,
-    rewardsEarned: 5050,
-    healthScore: 62,
-    monthlyData: [
-      { month: 'Jan', spend: 101000, utilization: 67.3, rewards: 5050 },
-    ],
-    categorySpend: [
-      { category: 'Online Shopping', amount: 45000, percentage: 44.6, color: '#4F46E5' },
-      { category: 'Bills', amount: 25000, percentage: 24.8, color: '#7C3AED' },
-      { category: 'Groceries', amount: 18000, percentage: 17.8, color: '#EC4899' },
-      { category: 'Dining', amount: 8000, percentage: 7.9, color: '#F59E0B' },
-      { category: 'Others', amount: 5000, percentage: 5.0, color: '#10B981' },
-    ],
-    insights: [
-      'High utilization - consider spreading spend',
-      'Excellent 5% rewards on online shopping',
-      'Utilization trend showing upward pattern',
-      'Annual fee recovered in first month',
-    ]
-  }
-];
-
 function App() {
   const [step, setStep] = useState<'welcome' | 'upload' | 'processing' | 'dashboard'>('welcome');
   const [progress, setProgress] = useState(0);
@@ -92,9 +36,8 @@ function App() {
     card3: null,
   });
 
-  // Analyzed cards
+  // Analyzed cards - THIS IS THE FIX
   const [analyzedCards, setAnalyzedCards] = useState<CardAnalysis[]>([]);
-  const [useDemoMode, setUseDemoMode] = useState(false);
 
   const handleFileSelect = (cardSlot: 'card1' | 'card2' | 'card3', event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -124,16 +67,14 @@ function App() {
     }
     
     setStep('processing');
-    setProgress(0);
+    setProgress(10);
     
     try {
       const analyzed: CardAnalysis[] = [];
+      const progressPerFile = 80 / filesToAnalyze.length;
       
       for (let i = 0; i < filesToAnalyze.length; i++) {
         const file = filesToAnalyze[i]!.file;
-        
-        // Update progress
-        setProgress(((i + 1) / filesToAnalyze.length) * 100);
         
         // Parse PDF
         const statement = await parseCreditCardStatement(file);
@@ -141,10 +82,14 @@ function App() {
         // Analyze statement
         const analysis = analyzeStatement(statement, `card-${i + 1}`);
         analyzed.push(analysis);
+        
+        // Update progress
+        setProgress(10 + ((i + 1) * progressPerFile));
       }
       
+      // Set analyzed cards
       setAnalyzedCards(analyzed);
-      setUseDemoMode(false);
+      setProgress(100);
       
       setTimeout(() => {
         setStep('dashboard');
@@ -152,32 +97,13 @@ function App() {
       
     } catch (error) {
       console.error('Analysis error:', error);
-      alert('Error analyzing PDFs. Using demo mode instead.');
-      setAnalyzedCards(mockCards);
-      setUseDemoMode(true);
-      setTimeout(() => setStep('dashboard'), 500);
+      alert(`Error analyzing PDFs: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your PDF format.`);
+      setStep('upload');
+      setProgress(0);
     }
   };
 
-  const handleDemoMode = () => {
-    setStep('processing');
-    setUseDemoMode(true);
-    
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-      currentProgress += 10;
-      setProgress(currentProgress);
-      if (currentProgress >= 100) {
-        clearInterval(interval);
-        setAnalyzedCards(mockCards);
-        setTimeout(() => setStep('dashboard'), 500);
-      }
-    }, 300);
-  };
-
   const getRecommendation = () => {
-    const cards = useDemoMode ? mockCards : analyzedCards;
-    
     if (!merchantType || !amount) {
       alert('Please fill in all fields');
       return;
@@ -185,7 +111,7 @@ function App() {
 
     const amountNum = parseFloat(amount);
     
-    const availableCards = cards.filter(card => {
+    const availableCards = analyzedCards.filter(card => {
       const newUtilization = ((card.limit * card.currentUtilization / 100) + amountNum) / card.limit * 100;
       return newUtilization < 80;
     });
@@ -471,21 +397,13 @@ function App() {
             <button
               onClick={handleAnalyze}
               disabled={!canAnalyze}
-              className={`w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg mb-3 ${
+              className={`w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg ${
                 canAnalyze
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-xl cursor-pointer'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
             >
               {canAnalyze ? `Analyze ${uploadedCount} Card${uploadedCount > 1 ? 's' : ''} →` : 'Upload at least 1 card to continue'}
-            </button>
-
-            {/* Demo Mode Button */}
-            <button
-              onClick={handleDemoMode}
-              className="w-full py-3 rounded-xl font-medium text-indigo-600 border-2 border-indigo-600 hover:bg-indigo-50 transition-all"
-            >
-              Try Demo Mode Instead
             </button>
 
             {/* Instructions */}
@@ -527,12 +445,8 @@ function App() {
           <div className="mb-6">
             <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            {useDemoMode ? 'Loading Demo Data...' : 'Analyzing Your Statements...'}
-          </h2>
-          <p className="text-gray-600 mb-6">
-            {useDemoMode ? 'Preparing sample insights' : 'Extracting transactions and calculating metrics'}
-          </p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Analyzing Your Statements...</h2>
+          <p className="text-gray-600 mb-6">Extracting transactions and calculating metrics</p>
           
           <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
             <div 
@@ -688,9 +602,7 @@ function App() {
     );
   }
 
-  // Dashboard
-  const displayCards = useDemoMode ? mockCards : analyzedCards;
-
+  // Dashboard - FIXED TO USE analyzedCards.length
   return (
     <>
       <div className="min-h-screen bg-gray-50 p-6">
@@ -698,7 +610,7 @@ function App() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Card Intelligence</h1>
             <p className="text-gray-600">
-              {useDemoMode ? 'Demo Mode - Sample Data' : `Analysis from ${displayCards.length} card${displayCards.length > 1 ? 's' : ''}`}
+              Analysis from {analyzedCards.length} card{analyzedCards.length !== 1 ? 's' : ''}
             </p>
           </div>
 
@@ -710,7 +622,7 @@ function App() {
                 </div>
                 <h3 className="font-semibold text-gray-700">Total Cards</h3>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{displayCards.length}</p>
+              <p className="text-3xl font-bold text-gray-900">{analyzedCards.length}</p>
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -721,7 +633,10 @@ function App() {
                 <h3 className="font-semibold text-gray-700">Avg Health Score</h3>
               </div>
               <p className="text-3xl font-bold text-gray-900">
-                {Math.round(displayCards.reduce((sum, c) => sum + c.healthScore, 0) / displayCards.length)}
+                {analyzedCards.length > 0 
+                  ? Math.round(analyzedCards.reduce((sum, c) => sum + c.healthScore, 0) / analyzedCards.length)
+                  : 0
+                }
               </p>
             </div>
 
@@ -733,7 +648,7 @@ function App() {
                 <h3 className="font-semibold text-gray-700">Total Spend</h3>
               </div>
               <p className="text-3xl font-bold text-gray-900">
-                ₹{(displayCards.reduce((sum, c) => sum + c.lastMonthSpend, 0) / 1000).toFixed(0)}K
+                ₹{(analyzedCards.reduce((sum, c) => sum + c.lastMonthSpend, 0) / 1000).toFixed(0)}K
               </p>
             </div>
           </div>
@@ -741,55 +656,70 @@ function App() {
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Your Cards</h2>
             
-            {displayCards.map((card) => (
-              <div key={card.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">{card.name}</h3>
-                    <p className="text-sm text-gray-500">Limit: ₹{(card.limit / 1000).toFixed(0)}K</p>
-                  </div>
-                  <div className="text-right">
-                    <div className={`text-2xl font-bold ${
-                      card.healthScore > 75 ? 'text-green-600' : 
-                      card.healthScore > 50 ? 'text-yellow-600' : 
-                      'text-red-600'
-                    }`}>
-                      {card.healthScore}
-                    </div>
-                    <p className="text-xs text-gray-500">Health Score</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Current Utilization</p>
-                    <p className="text-lg font-semibold text-gray-900">{card.currentUtilization}%</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Last Month Spend</p>
-                    <p className="text-lg font-semibold text-gray-900">₹{(card.lastMonthSpend / 1000).toFixed(0)}K</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Rewards Earned</p>
-                    <p className="text-lg font-semibold text-green-600">₹{card.rewardsEarned}</p>
-                  </div>
-                </div>
-
-                {card.healthScore < 70 && (
-                  <div className="mb-4 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
-                    <p className="text-sm text-yellow-800">High utilization detected - consider reducing usage or increasing limit</p>
-                  </div>
-                )}
-
+            {analyzedCards.length === 0 ? (
+              <div className="bg-white p-12 rounded-xl shadow-sm border border-gray-200 text-center">
+                <p className="text-gray-500 text-lg mb-4">No cards analyzed yet</p>
                 <button
-                  onClick={() => setSelectedCard(card)}
-                  className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+                  onClick={() => {
+                    setStep('upload');
+                    setUploadedFiles({ card1: null, card2: null, card3: null });
+                  }}
+                  className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
                 >
-                  View Detailed Analysis →
+                  Upload Statements
                 </button>
               </div>
-            ))}
+            ) : (
+              analyzedCards.map((card) => (
+                <div key={card.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">{card.name}</h3>
+                      <p className="text-sm text-gray-500">Limit: ₹{(card.limit / 1000).toFixed(0)}K</p>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-2xl font-bold ${
+                        card.healthScore > 75 ? 'text-green-600' : 
+                        card.healthScore > 50 ? 'text-yellow-600' : 
+                        'text-red-600'
+                      }`}>
+                        {card.healthScore}
+                      </div>
+                      <p className="text-xs text-gray-500">Health Score</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <p className="text-sm text-gray-500">Current Utilization</p>
+                      <p className="text-lg font-semibold text-gray-900">{card.currentUtilization}%</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Last Month Spend</p>
+                      <p className="text-lg font-semibold text-gray-900">₹{(card.lastMonthSpend / 1000).toFixed(0)}K</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Rewards Earned</p>
+                      <p className="text-lg font-semibold text-green-600">₹{card.rewardsEarned}</p>
+                    </div>
+                  </div>
+
+                  {card.healthScore < 70 && (
+                    <div className="mb-4 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <AlertTriangle className="w-4 h-4 text-yellow-600 mt-0.5" />
+                      <p className="text-sm text-yellow-800">High utilization detected - consider reducing usage or increasing limit</p>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setSelectedCard(card)}
+                    className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+                  >
+                    View Detailed Analysis →
+                  </button>
+                </div>
+              ))
+            )}
           </div>
 
           <button
@@ -803,20 +733,22 @@ function App() {
             ← Start Over
           </button>
 
-          <button
-            onClick={() => setShowRecommender(true)}
-            className="mt-4 w-full max-w-md mx-auto block bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Zap className="w-5 h-5" />
-              Which Card Should I Use?
-            </div>
-          </button>
+          {analyzedCards.length > 0 && (
+            <button
+              onClick={() => setShowRecommender(true)}
+              className="mt-4 w-full max-w-md mx-auto block bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Zap className="w-5 h-5" />
+                Which Card Should I Use?
+              </div>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Recommender Modal - Same as before */}
-      {showRecommender && (
+      {/* Recommender Modal */}
+      {showRecommender && analyzedCards.length > 0 && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
