@@ -1,4 +1,4 @@
-import { Upload, CreditCard, TrendingUp, Award, AlertTriangle, X, CheckCircle, Zap } from 'lucide-react';
+import { Upload, CreditCard, TrendingUp, Award, AlertTriangle, X, CheckCircle, Zap, FileText, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 // Types
@@ -28,6 +28,12 @@ interface CardData {
   monthlyData: MonthlyData[];
   categorySpend: CategorySpend[];
   insights: string[];
+}
+
+interface UploadedFile {
+  name: string;
+  size: number;
+  type: string;
 }
 
 // Mock Data
@@ -110,7 +116,38 @@ function App() {
     alternatives: Array<{ card: CardData; reason: string }>;
   } | null>(null);
 
-  const handleUpload = () => {
+  // Upload state
+  const [uploadedFiles, setUploadedFiles] = useState<{
+    card1: UploadedFile | null;
+    card2: UploadedFile | null;
+    card3: UploadedFile | null;
+  }>({
+    card1: null,
+    card2: null,
+    card3: null,
+  });
+
+  const handleFileUpload = (cardSlot: 'card1' | 'card2' | 'card3') => {
+    // Simulate file upload
+    const mockFile: UploadedFile = {
+      name: `Statement_${cardSlot}.pdf`,
+      size: Math.floor(Math.random() * 2000000) + 500000,
+      type: 'application/pdf'
+    };
+    setUploadedFiles(prev => ({ ...prev, [cardSlot]: mockFile }));
+  };
+
+  const removeFile = (cardSlot: 'card1' | 'card2' | 'card3') => {
+    setUploadedFiles(prev => ({ ...prev, [cardSlot]: null }));
+  };
+
+  const handleAnalyze = () => {
+    const uploadedCount = Object.values(uploadedFiles).filter(f => f !== null).length;
+    if (uploadedCount === 0) {
+      alert('Please upload at least one card statement');
+      return;
+    }
+    
     setStep('processing');
     let currentProgress = 0;
     const interval = setInterval(() => {
@@ -232,6 +269,12 @@ function App() {
     setRecommendation({ card: recommendedCard, reasoning, alternatives });
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
   // Welcome Screen
   if (step === 'welcome') {
     return (
@@ -288,49 +331,246 @@ function App() {
     );
   }
 
-  // Upload Screen
+  // Upload Screen - REDESIGNED
   if (step === 'upload') {
+    const uploadedCount = Object.values(uploadedFiles).filter(f => f !== null).length;
+    const canAnalyze = uploadedCount > 0;
+
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl p-8">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 py-8">
+        <div className="max-w-5xl mx-auto">
           <div className="mb-6">
             <button 
               onClick={() => setStep('welcome')}
-              className="text-indigo-600 hover:text-indigo-700 font-medium"
+              className="text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-2"
             >
               ← Back
             </button>
           </div>
 
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-2">Upload Your Statements</h2>
-            <p className="text-gray-600">PDF or CSV files • Minimum 12 months</p>
-          </div>
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">Upload Your Card Statements</h2>
+              <p className="text-gray-600">Upload statements for up to 3 cards • PDF or CSV • 12+ months</p>
+            </div>
 
-          <div 
-            onClick={handleUpload}
-            className="border-2 border-dashed border-gray-300 rounded-xl p-16 text-center hover:border-indigo-400 hover:bg-indigo-50 transition-all cursor-pointer"
-          >
-            <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">
-              Drop files here or click to browse
-            </h3>
-            <p className="text-gray-500 text-sm mb-4">
-              Supported: PDF, CSV (Demo Mode)
-            </p>
-            <span className="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg font-medium">
-              Choose Files
-            </span>
-          </div>
+            {/* Progress Indicator */}
+            <div className="mb-8">
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                  uploadedCount >= 1 ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {uploadedCount >= 1 ? '✓' : '1'}
+                </div>
+                <div className={`h-1 w-16 ${uploadedCount >= 2 ? 'bg-green-500' : 'bg-gray-200'}`}></div>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                  uploadedCount >= 2 ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {uploadedCount >= 2 ? '✓' : '2'}
+                </div>
+                <div className={`h-1 w-16 ${uploadedCount >= 3 ? 'bg-green-500' : 'bg-gray-200'}`}></div>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                  uploadedCount >= 3 ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {uploadedCount >= 3 ? '✓' : '3'}
+                </div>
+              </div>
+              <p className="text-center text-sm text-gray-600">
+                {uploadedCount === 0 && 'Upload at least 1 card to begin analysis'}
+                {uploadedCount === 1 && '1 card uploaded • Add more for better insights'}
+                {uploadedCount === 2 && '2 cards uploaded • Great! Add one more?'}
+                {uploadedCount === 3 && 'All 3 card slots filled • Ready to analyze!'}
+              </p>
+            </div>
 
-          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-semibold text-blue-900 mb-2">📋 How to get your statements:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Log into your bank's website/app</li>
-              <li>• Go to Credit Card → Statements</li>
-              <li>• Download last 12-36 months as PDF or CSV</li>
-              <li>• Upload all files here</li>
-            </ul>
+            {/* Card Upload Slots */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              {/* Card 1 */}
+              <div className="relative">
+                <div className={`border-2 border-dashed rounded-xl p-6 transition-all ${
+                  uploadedFiles.card1 
+                    ? 'border-green-400 bg-green-50' 
+                    : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer'
+                }`}
+                onClick={() => !uploadedFiles.card1 && handleFileUpload('card1')}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-indigo-600" />
+                      <span className="font-semibold text-gray-700">Card 1</span>
+                    </div>
+                    {uploadedFiles.card1 && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile('card1');
+                        }}
+                        className="p-1 hover:bg-red-100 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </button>
+                    )}
+                  </div>
+
+                  {!uploadedFiles.card1 ? (
+                    <div className="text-center">
+                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600 mb-2">Click to upload</p>
+                      <span className="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-medium">
+                        Choose File
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <FileText className="w-12 h-12 text-green-600 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-gray-800 mb-1 truncate">{uploadedFiles.card1.name}</p>
+                      <p className="text-xs text-gray-500">{formatFileSize(uploadedFiles.card1.size)}</p>
+                      <div className="mt-2 flex items-center justify-center gap-1">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span className="text-xs text-green-600 font-medium">Ready</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Card 2 */}
+              <div className="relative">
+                <div className={`border-2 border-dashed rounded-xl p-6 transition-all ${
+                  uploadedFiles.card2 
+                    ? 'border-green-400 bg-green-50' 
+                    : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer'
+                }`}
+                onClick={() => !uploadedFiles.card2 && handleFileUpload('card2')}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-purple-600" />
+                      <span className="font-semibold text-gray-700">Card 2</span>
+                    </div>
+                    {uploadedFiles.card2 && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile('card2');
+                        }}
+                        className="p-1 hover:bg-red-100 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </button>
+                    )}
+                  </div>
+
+                  {!uploadedFiles.card2 ? (
+                    <div className="text-center">
+                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600 mb-2">Click to upload</p>
+                      <span className="inline-block bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-medium">
+                        Choose File
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <FileText className="w-12 h-12 text-green-600 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-gray-800 mb-1 truncate">{uploadedFiles.card2.name}</p>
+                      <p className="text-xs text-gray-500">{formatFileSize(uploadedFiles.card2.size)}</p>
+                      <div className="mt-2 flex items-center justify-center gap-1">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span className="text-xs text-green-600 font-medium">Ready</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Card 3 */}
+              <div className="relative">
+                <div className={`border-2 border-dashed rounded-xl p-6 transition-all ${
+                  uploadedFiles.card3 
+                    ? 'border-green-400 bg-green-50' 
+                    : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer'
+                }`}
+                onClick={() => !uploadedFiles.card3 && handleFileUpload('card3')}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-green-600" />
+                      <span className="font-semibold text-gray-700">Card 3</span>
+                    </div>
+                    {uploadedFiles.card3 && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile('card3');
+                        }}
+                        className="p-1 hover:bg-red-100 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </button>
+                    )}
+                  </div>
+
+                  {!uploadedFiles.card3 ? (
+                    <div className="text-center">
+                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600 mb-2">Click to upload</p>
+                      <span className="inline-block bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-medium">
+                        Choose File
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <FileText className="w-12 h-12 text-green-600 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-gray-800 mb-1 truncate">{uploadedFiles.card3.name}</p>
+                      <p className="text-xs text-gray-500">{formatFileSize(uploadedFiles.card3.size)}</p>
+                      <div className="mt-2 flex items-center justify-center gap-1">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span className="text-xs text-green-600 font-medium">Ready</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Analyze Button */}
+            <button
+              onClick={handleAnalyze}
+              disabled={!canAnalyze}
+              className={`w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg ${
+                canAnalyze
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-xl cursor-pointer'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {canAnalyze ? `Analyze ${uploadedCount} Card${uploadedCount > 1 ? 's' : ''} →` : 'Upload at least 1 card to continue'}
+            </button>
+
+            {/* Instructions */}
+            <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+              <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                <span className="text-xl">📋</span>
+                How to get your statements:
+              </h4>
+              <ul className="text-sm text-blue-800 space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>Log into your bank's website/app</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>Go to Credit Card → Statements</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>Download last 12-36 months as PDF or CSV</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-0.5">•</span>
+                  <span>Upload each card's statement in a separate slot above</span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
