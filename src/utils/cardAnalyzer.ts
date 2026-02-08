@@ -28,6 +28,42 @@ export interface CardAnalysis {
   insights: string[];
 }
 
+// NEW: Merge multiple statements into one
+export function mergeStatements(statements: ParsedStatement[]): ParsedStatement {
+  if (statements.length === 0) {
+    throw new Error('No statements to merge');
+  }
+
+  if (statements.length === 1) {
+    return statements[0];
+  }
+
+  // Use first statement as base
+  const merged: ParsedStatement = {
+    cardName: statements[0].cardName,
+    cardLastFour: statements[0].cardLastFour,
+    statementPeriod: `${statements.length} months`,
+    transactions: [],
+    totalSpend: 0,
+    creditLimit: statements[0].creditLimit,
+    minimumDue: statements[0].minimumDue,
+    previousBalance: statements[0].previousBalance
+  };
+
+  // Merge all transactions
+  for (const statement of statements) {
+    merged.transactions.push(...statement.transactions);
+    merged.totalSpend += statement.totalSpend;
+    
+    // Use the highest credit limit found
+    if (statement.creditLimit && (!merged.creditLimit || statement.creditLimit > merged.creditLimit)) {
+      merged.creditLimit = statement.creditLimit;
+    }
+  }
+
+  return merged;
+}
+
 export function analyzeStatement(statement: ParsedStatement, cardId: string): CardAnalysis {
   const { transactions, totalSpend, creditLimit } = statement;
   const categoryTotals: Record<string, number> = {};
@@ -49,20 +85,36 @@ export function analyzeStatement(statement: ParsedStatement, cardId: string): Ca
   const healthScore = calculateHealthScore(currentUtilization, transactions);
   const insights = generateInsights(categorySpend, currentUtilization, transactions);
   const rewardsEarned = Math.floor(totalSpend * 0.01);
-  const monthlyData: MonthlyData[] = [
-    { month: 'Jan', spend: totalSpend, utilization: currentUtilization, rewards: rewardsEarned }
-  ];
+  
+  // Create monthly data based on number of months
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const numMonths = statement.statementPeriod.includes('months') 
+    ? parseInt(statement.statementPeriod) 
+    : 1;
+  
+  const avgMonthlySpend = totalSpend / numMonths;
+  const monthlyData: MonthlyData[] = [];
+  
+  for (let i = 0; i < Math.min(numMonths, 12); i++) {
+    monthlyData.push({
+      month: monthNames[(new Date().getMonth() - i + 12) % 12],
+      spend: avgMonthlySpend,
+      utilization: currentUtilization,
+      rewards: Math.floor(avgMonthlySpend * 0.01)
+    });
+  }
+  
   return {
     id: cardId,
     name: statement.cardName,
     limit: effectiveLimit,
     annualFee: 0,
     currentUtilization: parseFloat(currentUtilization.toFixed(1)),
-    lastMonthSpend: totalSpend,
+    lastMonthSpend: avgMonthlySpend,
     rewardsEarned,
     healthScore,
     categorySpend,
-    monthlyData,
+    monthlyData: monthlyData.reverse(),
     insights
   };
 }
