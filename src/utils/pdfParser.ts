@@ -197,10 +197,3 @@ export async function parseCreditCardStatement(file: File): Promise<ParsedStatem
     throw new Error('Failed to parse credit card statement');
   }
 }
-```
-
----
-
-**Commit message:**
-```
-Add debug alerts for PDF parsing
