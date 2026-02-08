@@ -34,10 +34,7 @@ export async function extractTextFromPDF(file: File): Promise<string> {
     fullText += pageText + '\n';
   }
   
-  // DEBUG: Log first 2000 characters
-  console.log('=== PDF TEXT EXTRACTED (first 2000 chars) ===');
-  console.log(fullText.substring(0, 2000));
-  console.log('=== END PDF TEXT ===');
+  alert('PDF TEXT SAMPLE:\n\n' + fullText.substring(0, 500));
   
   return fullText;
 }
@@ -46,54 +43,35 @@ export function parseTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
   
-  // More flexible date patterns
   const datePatterns = [
-    /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,           // DD/MM/YYYY or DD-MM-YYYY
-    /(\d{2}\s+[A-Z]{3}\s+\d{4})/i,              // DD MMM YYYY
-    /(\d{2}\s+[A-Za-z]+\s+\d{4})/i,             // DD Month YYYY
-    /(\d{4}[\/\-]\d{2}[\/\-]\d{2})/i,           // YYYY/MM/DD or YYYY-MM-DD
+    /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
+    /(\d{2}\s+[A-Z]{3}\s+\d{4})/i,
+    /(\d{2}\s+[A-Za-z]+\s+\d{4})/i,
+    /(\d{4}[\/\-]\d{2}[\/\-]\d{2})/i,
   ];
   
-  // More flexible amount patterns
   const amountPatterns = [
-    /(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)/i,        // Rs. 1,234.56
-    /([\d,]+\.\d{2})\s*(?:Dr|Cr|DR|CR)?/i,      // 1,234.56 Dr
-    /\b([\d,]{1,10}\.\d{2})\b/i,                 // Just 1,234.56
+    /(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)/i,
+    /([\d,]+\.\d{2})\s*(?:Dr|Cr|DR|CR)?/i,
+    /\b([\d,]{1,10}\.\d{2})\b/i,
   ];
-  
-  console.log('=== PARSING TRANSACTIONS ===');
-  console.log(`Total lines to process: ${lines.length}`);
-  
-  let foundCount = 0;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line.length < 10) continue;
     
     let dateMatch = null;
-    let datePattern = null;
-    
-    // Try all date patterns
     for (const pattern of datePatterns) {
       dateMatch = line.match(pattern);
-      if (dateMatch) {
-        datePattern = pattern;
-        break;
-      }
+      if (dateMatch) break;
     }
     
     if (!dateMatch) continue;
     
     let amountMatch = null;
-    let amountPattern = null;
-    
-    // Try all amount patterns
     for (const pattern of amountPatterns) {
       amountMatch = line.match(pattern);
-      if (amountMatch) {
-        amountPattern = pattern;
-        break;
-      }
+      if (amountMatch) break;
     }
     
     if (dateMatch && amountMatch) {
@@ -108,16 +86,6 @@ export function parseTransactions(text: string): Transaction[] {
         .substring(0, 50);
       
       if (amount > 0 && description.length > 3) {
-        foundCount++;
-        
-        if (foundCount <= 5) {
-          console.log(`Transaction ${foundCount}:`);
-          console.log(`  Date: ${date}`);
-          console.log(`  Description: ${description}`);
-          console.log(`  Amount: ${amount}`);
-          console.log(`  Full line: ${line}`);
-        }
-        
         transactions.push({
           date,
           description,
@@ -129,7 +97,7 @@ export function parseTransactions(text: string): Transaction[] {
     }
   }
   
-  console.log(`=== FOUND ${foundCount} TRANSACTIONS ===`);
+  alert(`FOUND ${transactions.length} TRANSACTIONS`);
   
   return transactions;
 }
@@ -156,19 +124,14 @@ export function categorizeTransaction(description: string): string {
 export function extractCardDetails(text: string): Partial<ParsedStatement> {
   const details: Partial<ParsedStatement> = {};
   
-  console.log('=== EXTRACTING CARD DETAILS ===');
-  
-  // Detect bank name
   const banks = ['HDFC', 'SBI', 'ICICI', 'AXIS', 'Kotak', 'Citi', 'American Express', 'AMEX', 'IndusInd', 'Yes Bank', 'Standard Chartered'];
   for (const bank of banks) {
     if (text.toUpperCase().includes(bank.toUpperCase())) {
       details.cardName = bank + ' Credit Card';
-      console.log(`Found bank: ${bank}`);
       break;
     }
   }
   
-  // More flexible card number patterns
   const cardPatterns = [
     /(?:card|account)\s*(?:number|no\.?)?\s*[:\-]?\s*[X*]{4,12}(\d{4})/i,
     /[X*]{12}(\d{4})/i,
@@ -179,12 +142,10 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     const cardMatch = text.match(pattern);
     if (cardMatch) {
       details.cardLastFour = cardMatch[1];
-      console.log(`Found card last 4: ${cardMatch[1]}`);
       break;
     }
   }
   
-  // More flexible credit limit patterns
   const limitPatterns = [
     /(?:credit\s*limit|total\s*limit|card\s*limit)[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([\d,]+(?:\.\d{2})?)/i,
     /limit[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([\d,]+(?:\.\d{2})?)/i,
@@ -194,12 +155,10 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     const limitMatch = text.match(pattern);
     if (limitMatch) {
       details.creditLimit = parseFloat(limitMatch[1].replace(/,/g, ''));
-      console.log(`Found credit limit: ${details.creditLimit}`);
       break;
     }
   }
   
-  // More flexible minimum due patterns
   const minDuePatterns = [
     /(?:minimum\s*(?:amount\s*)?due|min\.?\s*due|minimum\s*payment)[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([\d,]+(?:\.\d{2})?)/i,
     /(?:pay\s*by)[:\-]?\s*(?:Rs\.?|INR|₹)?\s*([\d,]+(?:\.\d{2})?)/i,
@@ -209,30 +168,19 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     const minDueMatch = text.match(pattern);
     if (minDueMatch) {
       details.minimumDue = parseFloat(minDueMatch[1].replace(/,/g, ''));
-      console.log(`Found minimum due: ${details.minimumDue}`);
       break;
     }
   }
-  
-  console.log('=== CARD DETAILS EXTRACTION COMPLETE ===');
   
   return details;
 }
 
 export async function parseCreditCardStatement(file: File): Promise<ParsedStatement> {
   try {
-    console.log(`=== PARSING FILE: ${file.name} ===`);
-    
     const text = await extractTextFromPDF(file);
     const transactions = parseTransactions(text);
     const cardDetails = extractCardDetails(text);
     const totalSpend = transactions.reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-    
-    console.log('=== FINAL RESULTS ===');
-    console.log(`Card Name: ${cardDetails.cardName || 'Unknown Card'}`);
-    console.log(`Total Transactions: ${transactions.length}`);
-    console.log(`Total Spend: ₹${totalSpend.toFixed(2)}`);
-    console.log(`Credit Limit: ${cardDetails.creditLimit ? '₹' + cardDetails.creditLimit : 'Not found'}`);
     
     return {
       cardName: cardDetails.cardName || 'Unknown Card',
@@ -249,3 +197,10 @@ export async function parseCreditCardStatement(file: File): Promise<ParsedStatem
     throw new Error('Failed to parse credit card statement');
   }
 }
+```
+
+---
+
+**Commit message:**
+```
+Add debug alerts for PDF parsing
