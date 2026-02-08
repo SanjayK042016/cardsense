@@ -36,7 +36,7 @@ function App() {
     card3: null,
   });
 
-  // Analyzed cards - THIS IS THE FIX
+  // Analyzed cards
   const [analyzedCards, setAnalyzedCards] = useState<CardAnalysis[]>([]);
 
   const handleFileSelect = (cardSlot: 'card1' | 'card2' | 'card3', event: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,7 +59,7 @@ function App() {
   };
 
   const handleAnalyze = async () => {
-    const filesToAnalyze = Object.values(uploadedFiles).filter(f => f !== null);
+    const filesToAnalyze = Object.values(uploadedFiles).filter(f => f !== null) as UploadedFile[];
     
     if (filesToAnalyze.length === 0) {
       alert('Please upload at least one card statement');
@@ -74,10 +74,10 @@ function App() {
       const progressPerFile = 80 / filesToAnalyze.length;
       
       for (let i = 0; i < filesToAnalyze.length; i++) {
-        const file = filesToAnalyze[i]!.file;
+        const uploadedFile = filesToAnalyze[i];
         
         // Parse PDF
-        const statement = await parseCreditCardStatement(file);
+        const statement = await parseCreditCardStatement(uploadedFile.file);
         
         // Analyze statement
         const analysis = analyzeStatement(statement, `card-${i + 1}`);
@@ -111,7 +111,7 @@ function App() {
 
     const amountNum = parseFloat(amount);
     
-    const availableCards = analyzedCards.filter(card => {
+    const availableCards = analyzedCards.filter((card: CardAnalysis) => {
       const newUtilization = ((card.limit * card.currentUtilization / 100) + amountNum) / card.limit * 100;
       return newUtilization < 80;
     });
@@ -125,7 +125,7 @@ function App() {
     let reasoning: string[] = [];
     let alternatives: Array<{ card: CardAnalysis; reason: string }> = [];
 
-    const categoryMatch = availableCards.map(card => {
+    const categoryMatch = availableCards.map((card: CardAnalysis) => {
       const categorySpend = card.categorySpend.find(c => 
         c.category.toLowerCase().includes(merchantType.toLowerCase())
       );
@@ -177,7 +177,7 @@ function App() {
       }
 
     } else {
-      const scored = availableCards.map(card => {
+      const scored = availableCards.map((card: CardAnalysis) => {
         const categorySpend = card.categorySpend.find(c => 
           c.category.toLowerCase().includes(merchantType.toLowerCase())
         );
@@ -483,9 +483,9 @@ function App() {
   // Detailed Card Modal
   const card = selectedCard;
   if (card) {
-    const avgUtilization = card.monthlyData.reduce((sum, m) => sum + m.utilization, 0) / card.monthlyData.length;
-    const totalRewards = card.monthlyData.reduce((sum, m) => sum + m.rewards, 0);
-    const totalSpend = card.monthlyData.reduce((sum, m) => sum + m.spend, 0);
+    const avgUtilization = card.monthlyData.reduce((sum: number, m) => sum + m.utilization, 0) / card.monthlyData.length;
+    const totalRewards = card.monthlyData.reduce((sum: number, m) => sum + m.rewards, 0);
+    const totalSpend = card.monthlyData.reduce((sum: number, m) => sum + m.spend, 0);
     const effectiveRate = totalSpend > 0 ? (totalRewards / totalSpend) * 100 : 0;
 
     return (
@@ -587,7 +587,7 @@ function App() {
                 Key Insights
               </h3>
               <div className="space-y-3">
-                {card.insights.map((insight, idx) => (
+                {card.insights.map((insight: string, idx: number) => (
                   <div key={idx} className="flex items-start gap-3 p-3 bg-indigo-50 rounded-lg">
                     <CheckCircle className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
                     <p className="text-sm text-gray-700">{insight}</p>
@@ -602,7 +602,7 @@ function App() {
     );
   }
 
-  // Dashboard - FIXED TO USE analyzedCards.length
+  // Dashboard
   return (
     <>
       <div className="min-h-screen bg-gray-50 p-6">
@@ -634,7 +634,7 @@ function App() {
               </div>
               <p className="text-3xl font-bold text-gray-900">
                 {analyzedCards.length > 0 
-                  ? Math.round(analyzedCards.reduce((sum, c) => sum + c.healthScore, 0) / analyzedCards.length)
+                  ? Math.round(analyzedCards.reduce((sum: number, c: CardAnalysis) => sum + c.healthScore, 0) / analyzedCards.length)
                   : 0
                 }
               </p>
@@ -648,7 +648,7 @@ function App() {
                 <h3 className="font-semibold text-gray-700">Total Spend</h3>
               </div>
               <p className="text-3xl font-bold text-gray-900">
-                ₹{(analyzedCards.reduce((sum, c) => sum + c.lastMonthSpend, 0) / 1000).toFixed(0)}K
+                ₹{(analyzedCards.reduce((sum: number, c: CardAnalysis) => sum + c.lastMonthSpend, 0) / 1000).toFixed(0)}K
               </p>
             </div>
           </div>
@@ -670,7 +670,7 @@ function App() {
                 </button>
               </div>
             ) : (
-              analyzedCards.map((card) => (
+              analyzedCards.map((card: CardAnalysis) => (
                 <div key={card.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between mb-4">
                     <div>
@@ -925,7 +925,7 @@ function App() {
 
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-gray-700">Why this card?</p>
-                    {recommendation.reasoning.map((reason, idx) => (
+                    {recommendation.reasoning.map((reason: string, idx: number) => (
                       <div key={idx} className="flex items-start gap-2">
                         <CheckCircle className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
                         <p className="text-sm text-gray-700">{reason}</p>
@@ -937,7 +937,7 @@ function App() {
                 {recommendation.alternatives.length > 0 && (
                   <div>
                     <p className="text-sm font-semibold text-gray-700 mb-3">Alternative Options:</p>
-                    {recommendation.alternatives.map((alt, idx) => (
+                    {recommendation.alternatives.map((alt, idx: number) => (
                       <div key={idx} className="bg-gray-50 p-4 rounded-lg mb-2">
                         <p className="font-medium text-gray-900">{alt.card.name}</p>
                         <p className="text-sm text-gray-600">{alt.reason}</p>
