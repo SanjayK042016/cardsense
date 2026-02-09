@@ -1120,30 +1120,3 @@ function App() {
 }
 
 export default App;
-```
-
----
-
-## **What's New:**
-
-### ✅ **Fixed Issues 1-4:**
-1. Shows card last 4 digits (when available)
-2. Shows "Total Spend" + "Avg: ₹XK/mo" separately
-3. Hides category spending if <5 transactions
-4. Shows trend indicators (↑↓ arrows) for utilization
-
-### ✅ **Killer Feature:**
-5. **Smart Recommendations widget** at top of dashboard
-6. Shows cross-card insights automatically
-7. Prominent CTA to open recommender
-
-### ✅ **Grammar & Polish:**
-- "1 month analyzed" (not "months")
-- Better spacing and visual hierarchy
-- Conditional rendering for low-data cards
-
----
-
-**Commit message:**
-```
-Add killer features: smart insights, trends, cross-card analysis
