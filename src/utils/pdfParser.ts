@@ -38,31 +38,26 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 
 function parseHDFCTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  const lines = text.split('\n');
   
-  const hdfcPattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}\s+(.+?)\s+[+\-]?\s*\d*\s*[₹C]\s*([\d,]+\.?\d*)/;
+  const pattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}\s+(.+?)\s+[+\-]\s*\d+\s+[₹C]\s*([\d,]+\.?\d*)/g;
   
-  for (const line of lines) {
-    const match = line.match(hdfcPattern);
-    if (match) {
-      const date = match[1];
-      const description = match[2].trim().substring(0, 60);
-      const amountStr = match[3].replace(/,/g, '');
-      const amount = parseFloat(amountStr);
-      
-      if (amount > 0 && description.length > 5) {
-        const isPayment = description.toLowerCase().includes('payment') || 
-                         description.toLowerCase().includes('bppy');
-        
-        if (!isPayment) {
-          transactions.push({
-            date,
-            description,
-            amount,
-            type: 'debit',
-            category: categorizeTransaction(description)
-          });
-        }
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const date = match[1];
+    const description = match[2].trim();
+    const amountStr = match[3].replace(/,/g, '');
+    const amount = parseFloat(amountStr);
+    
+    if (amount > 0 && description.length > 5) {
+      const isPayment = /payment|bppy|reversal/i.test(description);
+      if (!isPayment) {
+        transactions.push({
+          date,
+          description: description.substring(0, 60),
+          amount,
+          type: 'debit',
+          category: categorizeTransaction(description)
+        });
       }
     }
   }
@@ -72,44 +67,27 @@ function parseHDFCTransactions(text: string): Transaction[] {
 
 function parseAxisTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  const lines = text.split('\n');
   
-  for (const line of lines) {
-    const parts = line.trim().split(/\s+/);
-    if (parts.length < 4) continue;
+  const pattern = /(\d{2}\/\d{2}\/\d{4})\s+([A-Z].+?)\s+([A-Z\s]{3,30})\s+([\d,]+\.?\d*)\s+Dr/g;
+  
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const date = match[1];
+    const description = match[2].trim();
+    const amountStr = match[4].replace(/,/g, '');
+    const amount = parseFloat(amountStr);
     
-    const dateMatch = parts[0].match(/^(\d{2}\/\d{2}\/\d{4})$/);
-    if (!dateMatch) continue;
-    
-    const drCrMatch = line.match(/([\d,]+\.?\d*)\s+(Dr|Cr)\s*$/i);
-    if (!drCrMatch) continue;
-    
-    const date = dateMatch[1];
-    const amount = parseFloat(drCrMatch[1].replace(/,/g, ''));
-    const type = drCrMatch[2].toLowerCase();
-    
-    if (type !== 'dr' || amount < 1) continue;
-    
-    const description = line
-      .replace(date, '')
-      .replace(drCrMatch[0], '')
-      .trim()
-      .substring(0, 60);
-    
-    if (description.length < 5) continue;
-    
-    const isPayment = description.toLowerCase().includes('payment') ||
-                     description.toLowerCase().includes('reversal') ||
-                     description.toLowerCase().includes('cashback rebate');
-    
-    if (!isPayment) {
-      transactions.push({
-        date,
-        description,
-        amount,
-        type: 'debit',
-        category: categorizeTransaction(description)
-      });
+    if (amount > 0 && description.length > 5) {
+      const isPayment = /payment|reversal|cashback rebate|fuel cashback/i.test(description);
+      if (!isPayment) {
+        transactions.push({
+          date,
+          description: description.substring(0, 60),
+          amount,
+          type: 'debit',
+          category: categorizeTransaction(description)
+        });
+      }
     }
   }
   
@@ -142,7 +120,7 @@ function parseGenericTransactions(text: string): Transaction[] {
     
     if (description.length < 5) continue;
     
-    const isPayment = description.toLowerCase().includes('payment');
+    const isPayment = /payment/i.test(description);
     if (!isPayment) {
       transactions.push({
         date,
@@ -202,7 +180,7 @@ export function categorizeTransaction(description: string): string {
   if (desc.includes('grofers') || desc.includes('bigbasket') || desc.includes('dmart') ||
       desc.includes('reliance fresh') || desc.includes('grocery') || desc.includes('supermarket') ||
       desc.includes('fresh') || desc.includes('mart') || desc.includes('stores') ||
-      desc.includes('instamart')) {
+      desc.includes('instamart') || desc.includes('apollo pharmacy')) {
     return 'Groceries';
   }
   
@@ -215,7 +193,7 @@ export function categorizeTransaction(description: string): string {
   
   if (desc.includes('medical') || desc.includes('hospital') || desc.includes('pharmacy') ||
       desc.includes('clinic') || desc.includes('doctor') || desc.includes('apollo') ||
-      desc.includes('narayana')) {
+      desc.includes('narayana') || desc.includes('nhl')) {
     return 'Medical';
   }
   
@@ -247,8 +225,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   }
   
   const cardPatterns = [
-    /Card\s+No[.\s:]+\d+[X*]+(\d{4})/i,
-    /Credit\s+Card\s+No[.\s:]+\d+[X*]+(\d{4})/i,
+    /Card\s+No\.?\s*[:\-]?\s*\d+[X*]+(\d{4})/i,
+    /Credit\s+Card\s+No\.?\s*[:\-]?\s*\d+[X*]+(\d{4})/i,
     /[X*]{12}(\d{4})/,
     /\d{6}[X*]{6}(\d{4})/,
   ];
@@ -263,9 +241,9 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   }
   
   const limitPatterns = [
-    /TOTAL\s+CREDIT\s+LIMIT[^\d]*([\d,]+)/i,
-    /Credit\s+Limit[^\d]*([\d,]+\.?\d*)/i,
-    /AVAILABLE\s+CREDIT\s+LIMIT[^\d]*([\d,]+)/i,
+    /TOTAL\s+CREDIT\s+LIMIT\s*\([^)]*\)\s*[₹C]?\s*([\d,]+)/i,
+    /(?:Total\s+)?Credit\s+Limit\s+([\d,]+\.?\d*)/i,
+    /AVAILABLE\s+CREDIT\s+LIMIT\s*[₹C]?\s*([\d,]+)/i,
   ];
   
   for (const pattern of limitPatterns) {
@@ -282,8 +260,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   }
   
   const minDuePatterns = [
-    /MINIMUM\s+DUE[^\d]*([\d,]+\.?\d*)/i,
-    /Minimum\s+Payment\s+Due[^\d]*([\d,]+\.?\d*)/i,
+    /MINIMUM\s+DUE\s*[₹C]?\s*([\d,]+\.?\d*)/i,
+    /Minimum\s+Payment\s+Due\s+([\d,]+\.?\d*)/i,
   ];
   
   for (const pattern of minDuePatterns) {
