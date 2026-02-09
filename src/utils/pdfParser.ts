@@ -38,7 +38,6 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 
 function parseHDFCTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  
   const pattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}\s+(.+?)\s+[+\-]\s*\d+\s+[₹C]\s*([\d,]+\.?\d*)/g;
   
   let match;
@@ -67,7 +66,6 @@ function parseHDFCTransactions(text: string): Transaction[] {
 
 function parseAxisTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  
   const pattern = /(\d{2}\/\d{2}\/\d{4})\s+([A-Z].+?)\s+([A-Z\s]{3,30})\s+([\d,]+\.?\d*)\s+Dr/g;
   
   let match;
