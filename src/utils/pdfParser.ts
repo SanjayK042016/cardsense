@@ -40,24 +40,29 @@ function parseHDFCTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
   
-  const hdfcPattern = /(\d{2}\/\d{2}\/\d{4})\|\s*(\d{2}:\d{2})\s+(.+?)\s+[+\-]?\s*\d*\s*[₹C]\s*([\d,]+\.?\d*)/i;
+  const hdfcPattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}\s+(.+?)\s+[+\-]?\s*\d*\s*[₹C]\s*([\d,]+\.?\d*)/;
   
   for (const line of lines) {
     const match = line.match(hdfcPattern);
     if (match) {
       const date = match[1];
-      const description = match[3].trim().substring(0, 50);
-      const amountStr = match[4].replace(/,/g, '');
+      const description = match[2].trim().substring(0, 60);
+      const amountStr = match[3].replace(/,/g, '');
       const amount = parseFloat(amountStr);
       
-      if (amount > 0 && description.length > 3 && !description.includes('PAYMENT')) {
-        transactions.push({
-          date,
-          description,
-          amount,
-          type: 'debit',
-          category: categorizeTransaction(description)
-        });
+      if (amount > 0 && description.length > 5) {
+        const isPayment = description.toLowerCase().includes('payment') || 
+                         description.toLowerCase().includes('bppy');
+        
+        if (!isPayment) {
+          transactions.push({
+            date,
+            description,
+            amount,
+            type: 'debit',
+            category: categorizeTransaction(description)
+          });
+        }
       }
     }
   }
@@ -69,26 +74,42 @@ function parseAxisTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
   
-  const axisPattern = /(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([A-Z\s]+)\s+([\d,]+\.?\d*)\s*(Dr|Cr)/i;
-  
   for (const line of lines) {
-    const match = line.match(axisPattern);
-    if (match) {
-      const date = match[1];
-      const description = match[2].trim().substring(0, 50);
-      const amountStr = match[4].replace(/,/g, '');
-      const amount = parseFloat(amountStr);
-      const type = match[5].toLowerCase() === 'dr' ? 'debit' : 'credit';
-      
-      if (amount > 0 && description.length > 3 && type === 'debit') {
-        transactions.push({
-          date,
-          description,
-          amount,
-          type: 'debit',
-          category: categorizeTransaction(description)
-        });
-      }
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 4) continue;
+    
+    const dateMatch = parts[0].match(/^(\d{2}\/\d{2}\/\d{4})$/);
+    if (!dateMatch) continue;
+    
+    const drCrMatch = line.match(/([\d,]+\.?\d*)\s+(Dr|Cr)\s*$/i);
+    if (!drCrMatch) continue;
+    
+    const date = dateMatch[1];
+    const amount = parseFloat(drCrMatch[1].replace(/,/g, ''));
+    const type = drCrMatch[2].toLowerCase();
+    
+    if (type !== 'dr' || amount < 1) continue;
+    
+    const description = line
+      .replace(date, '')
+      .replace(drCrMatch[0], '')
+      .trim()
+      .substring(0, 60);
+    
+    if (description.length < 5) continue;
+    
+    const isPayment = description.toLowerCase().includes('payment') ||
+                     description.toLowerCase().includes('reversal') ||
+                     description.toLowerCase().includes('cashback rebate');
+    
+    if (!isPayment) {
+      transactions.push({
+        date,
+        description,
+        amount,
+        type: 'debit',
+        category: categorizeTransaction(description)
+      });
     }
   }
   
@@ -99,53 +120,37 @@ function parseGenericTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
   
-  const datePatterns = [
-    /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
-    /(\d{2}\s+[A-Z]{3}\s+\d{4})/i,
-  ];
-  
-  const amountPatterns = [
-    /(?:Rs\.?|INR|₹|C)\s*([\d,]+\.?\d*)/i,
-    /([\d,]+\.\d{2})\s*(?:Dr|Cr|DR|CR)?/i,
-  ];
-  
   for (const line of lines) {
-    if (line.length < 15) continue;
+    if (line.length < 20) continue;
     
-    let dateMatch = null;
-    for (const pattern of datePatterns) {
-      dateMatch = line.match(pattern);
-      if (dateMatch) break;
-    }
-    
+    const dateMatch = line.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})/);
     if (!dateMatch) continue;
     
-    let amountMatch = null;
-    for (const pattern of amountPatterns) {
-      amountMatch = line.match(pattern);
-      if (amountMatch) break;
-    }
+    const amountMatch = line.match(/([\d,]+\.\d{2})\s*(?:Dr|DR|Debit)?/i);
+    if (!amountMatch) continue;
     
-    if (dateMatch && amountMatch) {
-      const date = dateMatch[1];
-      const amountStr = amountMatch[1].replace(/,/g, '');
-      const amount = parseFloat(amountStr);
-      
-      const description = line
-        .replace(dateMatch[0], '')
-        .replace(amountMatch[0], '')
-        .trim()
-        .substring(0, 50);
-      
-      if (amount > 0 && description.length > 5 && !description.includes('PAYMENT')) {
-        transactions.push({
-          date,
-          description,
-          amount,
-          type: 'debit',
-          category: categorizeTransaction(description)
-        });
-      }
+    const date = dateMatch[1];
+    const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+    
+    if (amount < 1) continue;
+    
+    const description = line
+      .replace(dateMatch[0], '')
+      .replace(amountMatch[0], '')
+      .trim()
+      .substring(0, 60);
+    
+    if (description.length < 5) continue;
+    
+    const isPayment = description.toLowerCase().includes('payment');
+    if (!isPayment) {
+      transactions.push({
+        date,
+        description,
+        amount,
+        type: 'debit',
+        category: categorizeTransaction(description)
+      });
     }
   }
   
@@ -173,17 +178,17 @@ export function parseTransactions(text: string): Transaction[] {
 export function categorizeTransaction(description: string): string {
   const desc = description.toLowerCase();
   
-  if (desc.includes('restaurant') || desc.includes('cafe') || desc.includes('food') || 
-      desc.includes('zomato') || desc.includes('swiggy') || desc.includes('dominos') ||
+  if (desc.includes('swiggy') || desc.includes('zomato') || desc.includes('restaurant') || 
+      desc.includes('cafe') || desc.includes('food') || desc.includes('dominos') ||
       desc.includes('mcdonald') || desc.includes('starbucks') || desc.includes('pizza') ||
-      desc.includes('burger') || desc.includes('kitchen') || desc.includes('dining')) {
+      desc.includes('burger') || desc.includes('kitchen') || desc.includes('dining') ||
+      desc.includes('eternal limited') || desc.includes('mumbai masti')) {
     return 'Dining';
   }
   
   if (desc.includes('amazon') || desc.includes('flipkart') || desc.includes('myntra') ||
-      desc.includes('shop') || desc.includes('store') || desc.includes('mall') ||
-      desc.includes('fashion') || desc.includes('clothing') || desc.includes('apparel') ||
-      desc.includes('lifestyle')) {
+      desc.includes('lifestyle') || desc.includes('fashion') || desc.includes('clothing') || 
+      desc.includes('apparel')) {
     return 'Shopping';
   }
   
@@ -196,23 +201,21 @@ export function categorizeTransaction(description: string): string {
   
   if (desc.includes('grofers') || desc.includes('bigbasket') || desc.includes('dmart') ||
       desc.includes('reliance fresh') || desc.includes('grocery') || desc.includes('supermarket') ||
-      desc.includes('fresh') || desc.includes('mart')) {
+      desc.includes('fresh') || desc.includes('mart') || desc.includes('stores') ||
+      desc.includes('instamart')) {
     return 'Groceries';
   }
   
   if (desc.includes('electricity') || desc.includes('water') || desc.includes('gas') ||
-      desc.includes('mobile') || desc.includes('recharge') || desc.includes('bill payment') ||
-      desc.includes('paytm') || desc.includes('phonepe') || desc.includes('utility') ||
-      desc.includes('postpaid') || desc.includes('broadband')) {
+      desc.includes('mobile') || desc.includes('recharge') || desc.includes('jio') ||
+      desc.includes('airtel') || desc.includes('paytm') || desc.includes('phonepe') || 
+      desc.includes('utility') || desc.includes('postpaid') || desc.includes('broadband')) {
     return 'Bills';
   }
   
-  if (desc.includes('online') || desc.includes('e-commerce') || desc.includes('digital')) {
-    return 'Online Shopping';
-  }
-  
   if (desc.includes('medical') || desc.includes('hospital') || desc.includes('pharmacy') ||
-      desc.includes('clinic') || desc.includes('doctor') || desc.includes('apollo')) {
+      desc.includes('clinic') || desc.includes('doctor') || desc.includes('apollo') ||
+      desc.includes('narayana')) {
     return 'Medical';
   }
   
@@ -227,65 +230,71 @@ export function categorizeTransaction(description: string): string {
 export function extractCardDetails(text: string): Partial<ParsedStatement> {
   const details: Partial<ParsedStatement> = {};
   
-  const banks = [
-    'HDFC', 'SBI', 'ICICI', 'AXIS', 'Kotak', 'Citi', 'American Express', 
-    'AMEX', 'IndusInd', 'Yes Bank', 'Standard Chartered', 'RBL', 'AU Bank'
+  const bankPatterns = [
+    { name: 'AXIS', pattern: /AXIS\s+BANK/i },
+    { name: 'HDFC', pattern: /HDFC\s+BANK/i },
+    { name: 'SBI', pattern: /STATE\s+BANK/i },
+    { name: 'ICICI', pattern: /ICICI\s+BANK/i },
+    { name: 'Kotak', pattern: /KOTAK/i },
   ];
   
-  for (const bank of banks) {
-    if (text.toUpperCase().includes(bank.toUpperCase())) {
-      details.cardName = bank + ' Credit Card';
-      console.log(`🏦 Bank detected: ${bank}`);
+  for (const bank of bankPatterns) {
+    if (bank.pattern.test(text)) {
+      details.cardName = bank.name + ' Credit Card';
+      console.log(`🏦 Bank detected: ${bank.name}`);
       break;
     }
   }
   
   const cardPatterns = [
-    /(?:card|account)\s*(?:number|no\.?)?\s*[:\-]?\s*[X*]{4,12}(\d{4})/i,
-    /[X*]{12}(\d{4})/i,
-    /\*{12}(\d{4})/i,
-    /(\d{4})[X*]{8,12}(\d{4})/i,
+    /Card\s+No[.\s:]+\d+[X*]+(\d{4})/i,
+    /Credit\s+Card\s+No[.\s:]+\d+[X*]+(\d{4})/i,
+    /[X*]{12}(\d{4})/,
+    /\d{6}[X*]{6}(\d{4})/,
   ];
   
   for (const pattern of cardPatterns) {
-    const cardMatch = text.match(pattern);
-    if (cardMatch) {
-      details.cardLastFour = cardMatch[1];
-      console.log(`💳 Card ending: ${cardMatch[1]}`);
+    const match = text.match(pattern);
+    if (match) {
+      details.cardLastFour = match[1];
+      console.log(`💳 Card ending: ${match[1]}`);
       break;
     }
   }
   
   const limitPatterns = [
-    /(?:total\s*)?credit\s*limit[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
-    /limit[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
-    /available\s*credit\s*limit[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
+    /TOTAL\s+CREDIT\s+LIMIT[^\d]*([\d,]+)/i,
+    /Credit\s+Limit[^\d]*([\d,]+\.?\d*)/i,
+    /AVAILABLE\s+CREDIT\s+LIMIT[^\d]*([\d,]+)/i,
   ];
   
   for (const pattern of limitPatterns) {
-    const limitMatch = text.match(pattern);
-    if (limitMatch) {
-      const limit = parseFloat(limitMatch[1].replace(/,/g, ''));
-      if (limit > 10000) {
+    const match = text.match(pattern);
+    if (match) {
+      const limitStr = match[1].replace(/,/g, '');
+      const limit = parseFloat(limitStr);
+      if (limit >= 10000 && limit <= 10000000) {
         details.creditLimit = limit;
-        console.log(`💰 Credit limit: ₹${limit}`);
+        console.log(`💰 Credit limit: ₹${limit.toLocaleString('en-IN')}`);
         break;
       }
     }
   }
   
   const minDuePatterns = [
-    /minimum\s*(?:amount\s*)?due[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
-    /min\.?\s*due[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
-    /minimum\s*payment[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
+    /MINIMUM\s+DUE[^\d]*([\d,]+\.?\d*)/i,
+    /Minimum\s+Payment\s+Due[^\d]*([\d,]+\.?\d*)/i,
   ];
   
   for (const pattern of minDuePatterns) {
-    const minDueMatch = text.match(pattern);
-    if (minDueMatch) {
-      details.minimumDue = parseFloat(minDueMatch[1].replace(/,/g, ''));
-      console.log(`📋 Minimum due: ₹${details.minimumDue}`);
-      break;
+    const match = text.match(pattern);
+    if (match) {
+      const amount = parseFloat(match[1].replace(/,/g, ''));
+      if (amount > 0 && amount < 1000000) {
+        details.minimumDue = amount;
+        console.log(`📋 Minimum due: ₹${amount}`);
+        break;
+      }
     }
   }
   
@@ -300,24 +309,19 @@ export async function parseCreditCardStatement(file: File): Promise<ParsedStatem
     const transactions = parseTransactions(text);
     const cardDetails = extractCardDetails(text);
     
-    const validTransactions = transactions.filter(t => 
-      !t.description.toLowerCase().includes('payment') &&
-      !t.description.toLowerCase().includes('reversal')
-    );
-    
-    const totalSpend = validTransactions.reduce((sum: number, t: Transaction) => sum + t.amount, 0);
+    const totalSpend = transactions.reduce((sum: number, t: Transaction) => sum + t.amount, 0);
     
     console.log(`✅ Results:`);
     console.log(`   - Card: ${cardDetails.cardName || 'Unknown'}`);
-    console.log(`   - Transactions: ${validTransactions.length}`);
+    console.log(`   - Transactions: ${transactions.length}`);
     console.log(`   - Total Spend: ₹${totalSpend.toFixed(2)}`);
-    console.log(`   - Credit Limit: ₹${cardDetails.creditLimit || 'Not found'}\n`);
+    console.log(`   - Credit Limit: ${cardDetails.creditLimit ? '₹' + cardDetails.creditLimit.toLocaleString('en-IN') : 'Not found'}\n`);
     
     return {
       cardName: cardDetails.cardName || 'Unknown Card',
       cardLastFour: cardDetails.cardLastFour || '****',
       statementPeriod: 'Last Month',
-      transactions: validTransactions,
+      transactions,
       totalSpend,
       creditLimit: cardDetails.creditLimit,
       minimumDue: cardDetails.minimumDue,
