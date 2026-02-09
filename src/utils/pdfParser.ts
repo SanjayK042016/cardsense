@@ -36,12 +36,10 @@ export async function extractTextFromPDF(file: File): Promise<string> {
   return fullText;
 }
 
-// HDFC Bank Format Parser
 function parseHDFCTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
   
-  // HDFC Format: DD/MM/YYYY| HH:MM DESCRIPTION +/- REWARD ₹ AMOUNT
   const hdfcPattern = /(\d{2}\/\d{2}\/\d{4})\|\s*(\d{2}:\d{2})\s+(.+?)\s+[+\-]?\s*\d*\s*[₹C]\s*([\d,]+\.?\d*)/i;
   
   for (const line of lines) {
@@ -67,12 +65,10 @@ function parseHDFCTransactions(text: string): Transaction[] {
   return transactions;
 }
 
-// Axis Bank Format Parser
 function parseAxisTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
   
-  // Axis Format: DD/MM/YYYY DESCRIPTION CATEGORY AMOUNT Dr/Cr
   const axisPattern = /(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([A-Z\s]+)\s+([\d,]+\.?\d*)\s*(Dr|Cr)/i;
   
   for (const line of lines) {
@@ -99,7 +95,6 @@ function parseAxisTransactions(text: string): Transaction[] {
   return transactions;
 }
 
-// Generic fallback parser
 function parseGenericTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
@@ -158,21 +153,18 @@ function parseGenericTransactions(text: string): Transaction[] {
 }
 
 export function parseTransactions(text: string): Transaction[] {
-  // Try HDFC format first
   let transactions = parseHDFCTransactions(text);
   if (transactions.length > 0) {
     console.log(`✅ HDFC format detected: ${transactions.length} transactions`);
     return transactions;
   }
   
-  // Try Axis Bank format
   transactions = parseAxisTransactions(text);
   if (transactions.length > 0) {
     console.log(`✅ Axis Bank format detected: ${transactions.length} transactions`);
     return transactions;
   }
   
-  // Fallback to generic parser
   transactions = parseGenericTransactions(text);
   console.log(`⚠️ Generic parser used: ${transactions.length} transactions`);
   return transactions;
@@ -181,7 +173,6 @@ export function parseTransactions(text: string): Transaction[] {
 export function categorizeTransaction(description: string): string {
   const desc = description.toLowerCase();
   
-  // Dining & Food
   if (desc.includes('restaurant') || desc.includes('cafe') || desc.includes('food') || 
       desc.includes('zomato') || desc.includes('swiggy') || desc.includes('dominos') ||
       desc.includes('mcdonald') || desc.includes('starbucks') || desc.includes('pizza') ||
@@ -189,7 +180,6 @@ export function categorizeTransaction(description: string): string {
     return 'Dining';
   }
   
-  // Shopping
   if (desc.includes('amazon') || desc.includes('flipkart') || desc.includes('myntra') ||
       desc.includes('shop') || desc.includes('store') || desc.includes('mall') ||
       desc.includes('fashion') || desc.includes('clothing') || desc.includes('apparel') ||
@@ -197,7 +187,6 @@ export function categorizeTransaction(description: string): string {
     return 'Shopping';
   }
   
-  // Travel
   if (desc.includes('uber') || desc.includes('ola') || desc.includes('airline') ||
       desc.includes('hotel') || desc.includes('booking') || desc.includes('makemytrip') ||
       desc.includes('flight') || desc.includes('irctc') || desc.includes('taxi') ||
@@ -205,14 +194,12 @@ export function categorizeTransaction(description: string): string {
     return 'Travel';
   }
   
-  // Groceries
   if (desc.includes('grofers') || desc.includes('bigbasket') || desc.includes('dmart') ||
       desc.includes('reliance fresh') || desc.includes('grocery') || desc.includes('supermarket') ||
       desc.includes('fresh') || desc.includes('mart')) {
     return 'Groceries';
   }
   
-  // Bills & Utilities
   if (desc.includes('electricity') || desc.includes('water') || desc.includes('gas') ||
       desc.includes('mobile') || desc.includes('recharge') || desc.includes('bill payment') ||
       desc.includes('paytm') || desc.includes('phonepe') || desc.includes('utility') ||
@@ -220,18 +207,15 @@ export function categorizeTransaction(description: string): string {
     return 'Bills';
   }
   
-  // Online Shopping
   if (desc.includes('online') || desc.includes('e-commerce') || desc.includes('digital')) {
     return 'Online Shopping';
   }
   
-  // Medical
   if (desc.includes('medical') || desc.includes('hospital') || desc.includes('pharmacy') ||
       desc.includes('clinic') || desc.includes('doctor') || desc.includes('apollo')) {
     return 'Medical';
   }
   
-  // Entertainment
   if (desc.includes('netflix') || desc.includes('prime') || desc.includes('hotstar') ||
       desc.includes('spotify') || desc.includes('sonyliv') || desc.includes('entertainment')) {
     return 'Entertainment';
@@ -243,7 +227,6 @@ export function categorizeTransaction(description: string): string {
 export function extractCardDetails(text: string): Partial<ParsedStatement> {
   const details: Partial<ParsedStatement> = {};
   
-  // Bank detection
   const banks = [
     'HDFC', 'SBI', 'ICICI', 'AXIS', 'Kotak', 'Citi', 'American Express', 
     'AMEX', 'IndusInd', 'Yes Bank', 'Standard Chartered', 'RBL', 'AU Bank'
@@ -257,7 +240,6 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     }
   }
   
-  // Card number patterns
   const cardPatterns = [
     /(?:card|account)\s*(?:number|no\.?)?\s*[:\-]?\s*[X*]{4,12}(\d{4})/i,
     /[X*]{12}(\d{4})/i,
@@ -274,7 +256,6 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     }
   }
   
-  // Credit limit patterns
   const limitPatterns = [
     /(?:total\s*)?credit\s*limit[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
     /limit[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
@@ -285,7 +266,7 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     const limitMatch = text.match(pattern);
     if (limitMatch) {
       const limit = parseFloat(limitMatch[1].replace(/,/g, ''));
-      if (limit > 10000) { // Sanity check - credit limits are typically > 10K
+      if (limit > 10000) {
         details.creditLimit = limit;
         console.log(`💰 Credit limit: ₹${limit}`);
         break;
@@ -293,7 +274,6 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     }
   }
   
-  // Minimum due patterns
   const minDuePatterns = [
     /minimum\s*(?:amount\s*)?due[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
     /min\.?\s*due[:\-\s]*(?:Rs\.?|INR|₹|C)?\s*([\d,]+(?:\.\d{2})?)/i,
@@ -320,7 +300,6 @@ export async function parseCreditCardStatement(file: File): Promise<ParsedStatem
     const transactions = parseTransactions(text);
     const cardDetails = extractCardDetails(text);
     
-    // Filter out payment transactions
     const validTransactions = transactions.filter(t => 
       !t.description.toLowerCase().includes('payment') &&
       !t.description.toLowerCase().includes('reversal')
@@ -349,23 +328,3 @@ export async function parseCreditCardStatement(file: File): Promise<ParsedStatem
     throw new Error('Failed to parse credit card statement. Please check if this is a valid credit card PDF.');
   }
 }
-```
-
----
-
-## **What This Does:**
-
-✅ **Detects HDFC format** automatically (pipe-separated dates)
-✅ **Detects Axis Bank format** automatically (simple DD/MM/YYYY)
-✅ **Falls back to generic parser** for other banks
-✅ **Removes alert popups** - uses console logs instead
-✅ **Better categorization** (14 categories including Medical, Entertainment)
-✅ **Filters out payments and reversals** automatically
-✅ **Extracts credit limits correctly** from both formats
-✅ **Handles both ₹ and Rs.** notations
-
----
-
-## **Commit Message:**
-```
-Add universal multi-bank PDF parser supporting HDFC and Axis
