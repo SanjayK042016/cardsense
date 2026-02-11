@@ -38,7 +38,8 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 
 function parseHDFCTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  const pattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}\s+([A-Z][A-Z0-9 ]+?)\s+[+\-]\s*(?:\d+\s+)?C\s*([\d,]+\.?\d*)/g;
+  // PDF.js real output: "16/12/2025| 22:52EMIAMAZON SELLER SERVICESMUMBAI+ 225 C 6,803.00l"
+  const pattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}([A-Z][A-Z0-9 ]+?)\+\s*\d*\s*C\s*([\d,]+\.?\d*)/g;
 
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -47,7 +48,7 @@ function parseHDFCTransactions(text: string): Transaction[] {
     const amountStr = match[3].replace(/,/g, '');
     const amount = parseFloat(amountStr);
 
-    if (amount > 0 && description.length > 5) {
+    if (amount > 0 && description.length > 3) {
       const isPayment = /payment|bppy|reversal/i.test(description);
       if (!isPayment) {
         transactions.push({
@@ -66,7 +67,8 @@ function parseHDFCTransactions(text: string): Transaction[] {
 
 function parseAxisTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  const pattern = /(\d{2}\/\d{2}\/\d{4})\s+((?:UPI\/|REVERSAL|WWW|BB|CC|GST|FUEL|CASH).+?)\s+([A-Z][A-Z\s]+?)\s+([\d,]+\.?\d*)\s+Dr\s+[\d,.]+\s+Cr/g;
+  // PDF.js real output: "16/11/2025UPI/SWIGGY/...RESTAURANTS504.00 Dr15.00 Cr"
+  const pattern = /(\d{2}\/\d{2}\/\d{4})((?:UPI\/|REVERSAL|WWW|BB|CC|GST|FUEL|CASH).+?)([A-Z][A-Z ]+?)([\d,]+\.?\d*)\s*Dr[\d,. ]+Cr/g;
 
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -125,8 +127,8 @@ function parseGenericTransactions(text: string): Transaction[] {
 }
 
 export function parseTransactions(text: string): Transaction[] {
-  const isHDFC = /HDFC\s+Bank/i.test(text);
-  const isAxis = /AXIS\s+BANK/i.test(text);
+  const isHDFC = /HDFC\s*Bank/i.test(text);
+  const isAxis = /AXIS\s*BANK/i.test(text);
 
   if (isHDFC) {
     const transactions = parseHDFCTransactions(text);
@@ -205,13 +207,13 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   const details: Partial<ParsedStatement> = {};
 
   const bankPatterns = [
-    { name: 'AXIS', pattern: /AXIS\s+BANK/i },
-    { name: 'HDFC', pattern: /HDFC\s+Bank/i },
-    { name: 'SBI', pattern: /STATE\s+BANK/i },
-    { name: 'ICICI', pattern: /ICICI\s+BANK/i },
+    { name: 'AXIS', pattern: /AXIS\s*BANK/i },
+    { name: 'HDFC', pattern: /HDFC\s*Bank/i },
+    { name: 'SBI', pattern: /STATE\s*BANK/i },
+    { name: 'ICICI', pattern: /ICICI\s*BANK/i },
     { name: 'Kotak', pattern: /KOTAK/i },
     { name: 'IndusInd', pattern: /INDUSIND/i },
-    { name: 'Yes Bank', pattern: /YES\s+BANK/i },
+    { name: 'Yes Bank', pattern: /YES\s*BANK/i },
   ];
 
   for (const bank of bankPatterns) {
@@ -223,8 +225,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   }
 
   const cardPatterns = [
-    /Credit\s+Card\s+No\.?\s*[:\-]?\s*\d+[X*]+(\d{4})/i,
-    /Card\s+No\.?\s*[:\-]?\s*\d+[X*]+(\d{4})/i,
+    /Credit\s*Card\s*No\.?\s*[:\-]?\s*\d+[X*]+(\d{4})/i,
+    /Card\s*No\.?\s*[:\-]?\s*\d+[X*]+(\d{4})/i,
     /\d{6}[*]+(\d{4})/,
     /[X*]{12}(\d{4})/,
   ];
@@ -238,11 +240,13 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     }
   }
 
-  const isAxis = /AXIS\s+BANK/i.test(text);
-  const isHDFC = /HDFC\s+Bank/i.test(text);
+  const isAxis = /AXIS\s*BANK/i.test(text);
+  const isHDFC = /HDFC\s*Bank/i.test(text);
 
   if (isAxis) {
-    const axisLimit = text.match(/\d{6}\*+\d{4}\s+([\d,]+\.?\d*)/);
+    // PDF.js raw: "2984******6192500,000.00467,785.7450,000.00"
+    // Credit limit is the first large number right after the masked card number
+    const axisLimit = text.match(/\*{4,}\d{4}([\d,]+\.?\d{2})[\d,]/);
     if (axisLimit) {
       const limit = parseFloat(axisLimit[1].replace(/,/g, ''));
       if (limit >= 10000) {
@@ -251,8 +255,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
       }
     }
   } else if (isHDFC) {
-    // Use Array.from instead of spread for better bundler compatibility
-    const allMatches = Array.from(text.matchAll(/C([\d,]+)\s+C([\d,]+)\s+C([\d,]+)/g));
+    // PDF.js raw: "C9,42,000C9,23,518C3,76,800" - NO spaces between C-numbers
+    const allMatches = Array.from(text.matchAll(/C([\d,]+)C([\d,]+)C([\d,]+)/g));
     let maxLimit = 0;
     for (const m of allMatches) {
       const vals = [m[1], m[2], m[3]].map((v: string) => parseFloat(v.replace(/,/g, '')));
@@ -267,8 +271,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
 
   if (!details.creditLimit) {
     const limitPatterns = [
-      /Credit\s+Limit\s+([\d,]+\.?\d*)/i,
-      /CREDIT\s+LIMIT\s+([\d,]+)/i,
+      /Credit\s*Limit\s*([\d,]+\.?\d*)/i,
+      /CREDIT\s*LIMIT\s*([\d,]+)/i,
     ];
     for (const pattern of limitPatterns) {
       const match = text.match(pattern);
@@ -284,8 +288,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   }
 
   const minDuePatterns = [
-    /MINIMUM\s+DUE\s+DUE\s+DATE\s+C([\d,]+\.?\d*)/i,
-    /Minimum\s+Payment\s+Due\s+([\d,]+\.?\d*)\s+Dr/i,
+    /MINIMUM\s*DUE\s*DUE\s*DATE\s*C([\d,]+\.?\d*)/i,
+    /Minimum\s*Payment\s*Due\s*([\d,]+\.?\d*)\s*Dr/i,
   ];
 
   for (const pattern of minDuePatterns) {
