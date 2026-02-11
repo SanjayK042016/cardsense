@@ -38,8 +38,9 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 
 function parseHDFCTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  // PDF.js real output: "16/12/2025| 22:52EMIAMAZON SELLER SERVICESMUMBAI+ 225 C 6,803.00l"
-  const pattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}([A-Z][A-Z0-9 ]+?)\+\s*\d*\s*C\s*([\d,]+\.?\d*)/g;
+  // Real PDF.js output: "16/12/2025| 22:52 EMI AMAZON SELLER SERVICESMUMBAI + 225 C 6,803.00 l"
+  // Spaces between all tokens. Description starts with capital letter after timestamp.
+  const pattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}\s+([A-Z][A-Z0-9 ]+?)\s+\+\s*\d*\s*C\s*([\d,]+\.?\d*)/g;
 
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -61,14 +62,13 @@ function parseHDFCTransactions(text: string): Transaction[] {
       }
     }
   }
-
   return transactions;
 }
 
 function parseAxisTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  // PDF.js real output: "16/11/2025UPI/SWIGGY/...RESTAURANTS504.00 Dr15.00 Cr"
-  const pattern = /(\d{2}\/\d{2}\/\d{4})((?:UPI\/|REVERSAL|WWW|BB|CC|GST|FUEL|CASH).+?)([A-Z][A-Z ]+?)([\d,]+\.?\d*)\s*Dr[\d,. ]+Cr/g;
+  // Real PDF.js output: "16/11/2025 UPI/SWIGGY/... RESTAURANTS 504.00 Dr 15.00 Cr"
+  const pattern = /(\d{2}\/\d{2}\/\d{4})\s+((?:UPI\/|REVERSAL|WWW|BB|CC|GST|FUEL|CASH).+?)\s+([A-Z][A-Z\s]+?)\s+([\d,]+\.?\d*)\s+Dr\s+[\d,.]+\s+Cr/g;
 
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -90,14 +90,12 @@ function parseAxisTransactions(text: string): Transaction[] {
       }
     }
   }
-
   return transactions;
 }
 
 function parseGenericTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   const lines = text.split('\n');
-
   for (const line of lines) {
     if (line.length < 20) continue;
     const dateMatch = line.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})/);
@@ -107,22 +105,11 @@ function parseGenericTransactions(text: string): Transaction[] {
     const date = dateMatch[1];
     const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
     if (amount < 1) continue;
-    const description = line
-      .replace(dateMatch[0], '')
-      .replace(amountMatch[0], '')
-      .trim()
-      .substring(0, 60);
+    const description = line.replace(dateMatch[0], '').replace(amountMatch[0], '').trim().substring(0, 60);
     if (description.length < 5) continue;
     if (/payment|reversal/i.test(description)) continue;
-    transactions.push({
-      date,
-      description,
-      amount,
-      type: 'debit',
-      category: categorizeTransaction(description)
-    });
+    transactions.push({ date, description, amount, type: 'debit', category: categorizeTransaction(description) });
   }
-
   return transactions;
 }
 
@@ -135,13 +122,11 @@ export function parseTransactions(text: string): Transaction[] {
     console.log(`✅ HDFC format detected: ${transactions.length} transactions`);
     return transactions;
   }
-
   if (isAxis) {
     const transactions = parseAxisTransactions(text);
     console.log(`✅ Axis Bank format detected: ${transactions.length} transactions`);
     return transactions;
   }
-
   const transactions = parseGenericTransactions(text);
   console.log(`⚠️ Generic parser used: ${transactions.length} transactions`);
   return transactions;
@@ -149,56 +134,39 @@ export function parseTransactions(text: string): Transaction[] {
 
 export function categorizeTransaction(description: string): string {
   const desc = description.toLowerCase();
-
   if (desc.includes('swiggy') || desc.includes('zomato') || desc.includes('restaurant') ||
       desc.includes('cafe') || desc.includes('food') || desc.includes('dominos') ||
       desc.includes('mcdonald') || desc.includes('starbucks') || desc.includes('pizza') ||
       desc.includes('burger') || desc.includes('kitchen') || desc.includes('dining') ||
       desc.includes('eternal') || desc.includes('mumbai masti') || desc.includes('kfc') ||
-      desc.includes('biryani') || desc.includes('chai')) {
-    return 'Dining';
-  }
+      desc.includes('biryani') || desc.includes('chai')) return 'Dining';
 
   if (desc.includes('amazon') || desc.includes('flipkart') || desc.includes('myntra') ||
       desc.includes('lifestyle') || desc.includes('fashion') || desc.includes('apparel') ||
-      desc.includes('dept store') || desc.includes('cloth')) {
-    return 'Shopping';
-  }
+      desc.includes('dept store') || desc.includes('cloth')) return 'Shopping';
 
   if (desc.includes('uber') || desc.includes('ola') || desc.includes('airline') ||
       desc.includes('hotel') || desc.includes('booking') || desc.includes('makemytrip') ||
       desc.includes('flight') || desc.includes('irctc') || desc.includes('rapido') ||
-      desc.includes('travel')) {
-    return 'Travel';
-  }
+      desc.includes('travel')) return 'Travel';
 
   if (desc.includes('grofers') || desc.includes('bigbasket') || desc.includes('dmart') ||
       desc.includes('grocery') || desc.includes('supermarket') || desc.includes('instamart') ||
-      desc.includes('hypermarket')) {
-    return 'Groceries';
-  }
+      desc.includes('hypermarket')) return 'Groceries';
 
   if (desc.includes('jio') || desc.includes('airtel') || desc.includes('bsnl') ||
       desc.includes('postpaid') || desc.includes('broadband') || desc.includes('electricity') ||
-      desc.includes('utility')) {
-    return 'Bills';
-  }
+      desc.includes('utility')) return 'Bills';
 
   if (desc.includes('medical') || desc.includes('hospital') || desc.includes('pharmacy') ||
       desc.includes('clinic') || desc.includes('doctor') || desc.includes('apollo') ||
       desc.includes('narayana') || desc.includes('nhl') || desc.includes('healthflex') ||
-      desc.includes('iskin')) {
-    return 'Medical';
-  }
+      desc.includes('iskin')) return 'Medical';
 
   if (desc.includes('netflix') || desc.includes('prime') || desc.includes('hotstar') ||
-      desc.includes('spotify') || desc.includes('sonyliv') || desc.includes('zee5')) {
-    return 'Entertainment';
-  }
+      desc.includes('spotify') || desc.includes('sonyliv') || desc.includes('zee5')) return 'Entertainment';
 
-  if (desc.includes('fuel') || desc.includes('petrol')) {
-    return 'Fuel';
-  }
+  if (desc.includes('fuel') || desc.includes('petrol')) return 'Fuel';
 
   return 'Others';
 }
@@ -244,9 +212,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   const isHDFC = /HDFC\s*Bank/i.test(text);
 
   if (isAxis) {
-    // PDF.js raw: "2984******6192500,000.00467,785.7450,000.00"
-    // Credit limit is the first large number right after the masked card number
-    const axisLimit = text.match(/\*{4,}\d{4}([\d,]+\.?\d{2})[\d,]/);
+    // Real PDF.js: "652984****** 6192 500,000.00 467,785.74 50,000.00"
+    const axisLimit = text.match(/\d{6}[*\s]+\d{4}\s+([\d,]+\.?\d*)/);
     if (axisLimit) {
       const limit = parseFloat(axisLimit[1].replace(/,/g, ''));
       if (limit >= 10000) {
@@ -255,8 +222,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
       }
     }
   } else if (isHDFC) {
-    // PDF.js raw: "C9,42,000C9,23,518C3,76,800" - NO spaces between C-numbers
-    const allMatches = Array.from(text.matchAll(/C([\d,]+)C([\d,]+)C([\d,]+)/g));
+    // Real PDF.js: "C9,42,000 C9,23,518 C3,76,800" - WITH spaces
+    const allMatches = Array.from(text.matchAll(/C([\d,]+)\s+C([\d,]+)\s+C([\d,]+)/g));
     let maxLimit = 0;
     for (const m of allMatches) {
       const vals = [m[1], m[2], m[3]].map((v: string) => parseFloat(v.replace(/,/g, '')));
@@ -288,8 +255,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   }
 
   const minDuePatterns = [
-    /MINIMUM\s*DUE\s*DUE\s*DATE\s*C([\d,]+\.?\d*)/i,
-    /Minimum\s*Payment\s*Due\s*([\d,]+\.?\d*)\s*Dr/i,
+    /MINIMUM\s+DUE\s+DUE\s+DATE\s+C([\d,]+\.?\d*)/i,
+    /Minimum\s+Payment\s+Due\s+([\d,]+\.?\d*)\s+Dr/i,
   ];
 
   for (const pattern of minDuePatterns) {
@@ -310,11 +277,9 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
 export async function parseCreditCardStatement(file: File): Promise<ParsedStatement> {
   try {
     console.log(`\n🔍 Parsing: ${file.name}`);
-
     const text = await extractTextFromPDF(file);
     const transactions = parseTransactions(text);
     const cardDetails = extractCardDetails(text);
-
     const totalSpend = transactions.reduce((sum: number, t: Transaction) => sum + t.amount, 0);
 
     console.log(`✅ Results:`);
