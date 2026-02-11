@@ -38,9 +38,6 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 
 function parseHDFCTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  // HDFC format (single space-joined text):
-  // 16/12/2025| 22:52 EMI AMAZON SELLER SERVICESMUMBAI + 225 C 6,803.00
-  // Description must start with a capital letter to avoid matching payment continuation lines
   const pattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}\s+([A-Z][A-Z0-9 ]+?)\s+[+\-]\s*(?:\d+\s+)?C\s*([\d,]+\.?\d*)/g;
 
   let match;
@@ -69,8 +66,6 @@ function parseHDFCTransactions(text: string): Transaction[] {
 
 function parseAxisTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  // AXIS format: 16/11/2025 UPI/SWIGGY/... RESTAURANTS 504.00 Dr 15.00 Cr
-  // Categories: RESTAURANTS, MISC STORE, DEPT STORES, MEDICAL, SERVICES, TRAVEL, CLOTH STORES, MISCELLANEOUS
   const pattern = /(\d{2}\/\d{2}\/\d{4})\s+((?:UPI\/|REVERSAL|WWW|BB|CC|GST|FUEL|CASH).+?)\s+([A-Z][A-Z\s]+?)\s+([\d,]+\.?\d*)\s+Dr\s+[\d,.]+\s+Cr/g;
 
   let match;
@@ -247,8 +242,6 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
   const isHDFC = /HDFC\s+Bank/i.test(text);
 
   if (isAxis) {
-    // AXIS line: "652984******6192 500,000.00 467,785.74 50,000.00"
-    // First number after masked card number = credit limit
     const axisLimit = text.match(/\d{6}\*+\d{4}\s+([\d,]+\.?\d*)/);
     if (axisLimit) {
       const limit = parseFloat(axisLimit[1].replace(/,/g, ''));
@@ -258,12 +251,11 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
       }
     }
   } else if (isHDFC) {
-    // HDFC line: "C9,42,000 C9,23,518 C3,76,800"
-    // Find all groups of 3 consecutive C-numbers and take the largest
-    const allMatches = [...text.matchAll(/C([\d,]+)\s+C([\d,]+)\s+C([\d,]+)/g)];
+    // Use Array.from instead of spread for better bundler compatibility
+    const allMatches = Array.from(text.matchAll(/C([\d,]+)\s+C([\d,]+)\s+C([\d,]+)/g));
     let maxLimit = 0;
     for (const m of allMatches) {
-      const vals = [m[1], m[2], m[3]].map(v => parseFloat(v.replace(/,/g, '')));
+      const vals = [m[1], m[2], m[3]].map((v: string) => parseFloat(v.replace(/,/g, '')));
       const maxVal = Math.max(...vals);
       if (maxVal > maxLimit) maxLimit = maxVal;
     }
@@ -273,7 +265,6 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     }
   }
 
-  // Fallback for other banks
   if (!details.creditLimit) {
     const limitPatterns = [
       /Credit\s+Limit\s+([\d,]+\.?\d*)/i,
@@ -292,7 +283,6 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     }
   }
 
-  // Minimum due
   const minDuePatterns = [
     /MINIMUM\s+DUE\s+DUE\s+DATE\s+C([\d,]+\.?\d*)/i,
     /Minimum\s+Payment\s+Due\s+([\d,]+\.?\d*)\s+Dr/i,
