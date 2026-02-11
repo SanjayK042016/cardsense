@@ -38,9 +38,10 @@ export async function extractTextFromPDF(file: File): Promise<string> {
 
 function parseHDFCTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
-  // HDFC format: 16/12/2025| 22:52 EMI AMAZON SELLER SERVICESMUMBAI + 225 C 6,803.00 l
-  // Reward may or may not be present: "+ 225 C amount" or "+ C amount"
-  const pattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}\s+(.+?)\s+[+\-]\s*(?:\d+\s+)?C\s*([\d,]+\.?\d*)/g;
+  // HDFC format (single space-joined text):
+  // 16/12/2025| 22:52 EMI AMAZON SELLER SERVICESMUMBAI + 225 C 6,803.00
+  // Description must start with a capital letter to avoid matching payment continuation lines
+  const pattern = /(\d{2}\/\d{2}\/\d{4})\|\s*\d{2}:\d{2}\s+([A-Z][A-Z0-9 ]+?)\s+[+\-]\s*(?:\d+\s+)?C\s*([\d,]+\.?\d*)/g;
 
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -69,6 +70,7 @@ function parseHDFCTransactions(text: string): Transaction[] {
 function parseAxisTransactions(text: string): Transaction[] {
   const transactions: Transaction[] = [];
   // AXIS format: 16/11/2025 UPI/SWIGGY/... RESTAURANTS 504.00 Dr 15.00 Cr
+  // Categories: RESTAURANTS, MISC STORE, DEPT STORES, MEDICAL, SERVICES, TRAVEL, CLOTH STORES, MISCELLANEOUS
   const pattern = /(\d{2}\/\d{2}\/\d{4})\s+((?:UPI\/|REVERSAL|WWW|BB|CC|GST|FUEL|CASH).+?)\s+([A-Z][A-Z\s]+?)\s+([\d,]+\.?\d*)\s+Dr\s+[\d,.]+\s+Cr/g;
 
   let match;
@@ -101,44 +103,34 @@ function parseGenericTransactions(text: string): Transaction[] {
 
   for (const line of lines) {
     if (line.length < 20) continue;
-
     const dateMatch = line.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})/);
     if (!dateMatch) continue;
-
     const amountMatch = line.match(/([\d,]+\.\d{2})\s*(?:Dr|DR|Debit)/i);
     if (!amountMatch) continue;
-
     const date = dateMatch[1];
     const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
-
     if (amount < 1) continue;
-
     const description = line
       .replace(dateMatch[0], '')
       .replace(amountMatch[0], '')
       .trim()
       .substring(0, 60);
-
     if (description.length < 5) continue;
-
-    const isPayment = /payment|reversal/i.test(description);
-    if (!isPayment) {
-      transactions.push({
-        date,
-        description,
-        amount,
-        type: 'debit',
-        category: categorizeTransaction(description)
-      });
-    }
+    if (/payment|reversal/i.test(description)) continue;
+    transactions.push({
+      date,
+      description,
+      amount,
+      type: 'debit',
+      category: categorizeTransaction(description)
+    });
   }
 
   return transactions;
 }
 
 export function parseTransactions(text: string): Transaction[] {
-  // Detect bank first
-  const isHDFC = /HDFC\s+BANK/i.test(text);
+  const isHDFC = /HDFC\s+Bank/i.test(text);
   const isAxis = /AXIS\s+BANK/i.test(text);
 
   if (isHDFC) {
@@ -153,7 +145,6 @@ export function parseTransactions(text: string): Transaction[] {
     return transactions;
   }
 
-  // Fallback
   const transactions = parseGenericTransactions(text);
   console.log(`⚠️ Generic parser used: ${transactions.length} transactions`);
   return transactions;
@@ -166,56 +157,50 @@ export function categorizeTransaction(description: string): string {
       desc.includes('cafe') || desc.includes('food') || desc.includes('dominos') ||
       desc.includes('mcdonald') || desc.includes('starbucks') || desc.includes('pizza') ||
       desc.includes('burger') || desc.includes('kitchen') || desc.includes('dining') ||
-      desc.includes('eternal limited') || desc.includes('mumbai masti') ||
-      desc.includes('kfc') || desc.includes('chai') || desc.includes('biryani')) {
+      desc.includes('eternal') || desc.includes('mumbai masti') || desc.includes('kfc') ||
+      desc.includes('biryani') || desc.includes('chai')) {
     return 'Dining';
   }
 
   if (desc.includes('amazon') || desc.includes('flipkart') || desc.includes('myntra') ||
-      desc.includes('lifestyle') || desc.includes('fashion') || desc.includes('clothing') ||
-      desc.includes('apparel') || desc.includes('cloth')) {
+      desc.includes('lifestyle') || desc.includes('fashion') || desc.includes('apparel') ||
+      desc.includes('dept store') || desc.includes('cloth')) {
     return 'Shopping';
   }
 
   if (desc.includes('uber') || desc.includes('ola') || desc.includes('airline') ||
       desc.includes('hotel') || desc.includes('booking') || desc.includes('makemytrip') ||
-      desc.includes('flight') || desc.includes('irctc') || desc.includes('taxi') ||
-      desc.includes('travel') || desc.includes('rapido')) {
+      desc.includes('flight') || desc.includes('irctc') || desc.includes('rapido') ||
+      desc.includes('travel')) {
     return 'Travel';
   }
 
   if (desc.includes('grofers') || desc.includes('bigbasket') || desc.includes('dmart') ||
-      desc.includes('reliance fresh') || desc.includes('grocery') || desc.includes('supermarket') ||
-      desc.includes('instamart') || desc.includes('hypermarket') || desc.includes('fresh mart')) {
+      desc.includes('grocery') || desc.includes('supermarket') || desc.includes('instamart') ||
+      desc.includes('hypermarket')) {
     return 'Groceries';
   }
 
-  if (desc.includes('electricity') || desc.includes('water') || desc.includes('gas') ||
-      desc.includes('jio') || desc.includes('airtel') || desc.includes('bsnl') ||
-      desc.includes('postpaid') || desc.includes('broadband') || desc.includes('utility')) {
+  if (desc.includes('jio') || desc.includes('airtel') || desc.includes('bsnl') ||
+      desc.includes('postpaid') || desc.includes('broadband') || desc.includes('electricity') ||
+      desc.includes('utility')) {
     return 'Bills';
   }
 
   if (desc.includes('medical') || desc.includes('hospital') || desc.includes('pharmacy') ||
       desc.includes('clinic') || desc.includes('doctor') || desc.includes('apollo') ||
-      desc.includes('narayana') || desc.includes('nhl') || desc.includes('iskin') ||
-      desc.includes('healthflex')) {
+      desc.includes('narayana') || desc.includes('nhl') || desc.includes('healthflex') ||
+      desc.includes('iskin')) {
     return 'Medical';
   }
 
   if (desc.includes('netflix') || desc.includes('prime') || desc.includes('hotstar') ||
-      desc.includes('spotify') || desc.includes('sonyliv') || desc.includes('zee5') ||
-      desc.includes('entertainment')) {
+      desc.includes('spotify') || desc.includes('sonyliv') || desc.includes('zee5')) {
     return 'Entertainment';
   }
 
-  if (desc.includes('fuel') || desc.includes('petrol') || desc.includes('filling station')) {
+  if (desc.includes('fuel') || desc.includes('petrol')) {
     return 'Fuel';
-  }
-
-  if (desc.includes('dept store') || desc.includes('dept stores') || desc.includes('misc store') ||
-      desc.includes('miscellaneous')) {
-    return 'Shopping';
   }
 
   return 'Others';
@@ -224,10 +209,9 @@ export function categorizeTransaction(description: string): string {
 export function extractCardDetails(text: string): Partial<ParsedStatement> {
   const details: Partial<ParsedStatement> = {};
 
-  // Bank detection - order matters, check AXIS before generic patterns
   const bankPatterns = [
     { name: 'AXIS', pattern: /AXIS\s+BANK/i },
-    { name: 'HDFC', pattern: /HDFC\s+BANK/i },
+    { name: 'HDFC', pattern: /HDFC\s+Bank/i },
     { name: 'SBI', pattern: /STATE\s+BANK/i },
     { name: 'ICICI', pattern: /ICICI\s+BANK/i },
     { name: 'Kotak', pattern: /KOTAK/i },
@@ -243,7 +227,6 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     }
   }
 
-  // Card number - last 4 digits
   const cardPatterns = [
     /Credit\s+Card\s+No\.?\s*[:\-]?\s*\d+[X*]+(\d{4})/i,
     /Card\s+No\.?\s*[:\-]?\s*\d+[X*]+(\d{4})/i,
@@ -260,13 +243,12 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
     }
   }
 
-  // Credit limit - bank specific patterns
   const isAxis = /AXIS\s+BANK/i.test(text);
-  const isHDFC = /HDFC\s+BANK/i.test(text);
+  const isHDFC = /HDFC\s+Bank/i.test(text);
 
   if (isAxis) {
-    // AXIS: card number line has "652984******6192 500,000.00 467,785.74 50,000.00"
-    // First number after masked card = credit limit
+    // AXIS line: "652984******6192 500,000.00 467,785.74 50,000.00"
+    // First number after masked card number = credit limit
     const axisLimit = text.match(/\d{6}\*+\d{4}\s+([\d,]+\.?\d*)/);
     if (axisLimit) {
       const limit = parseFloat(axisLimit[1].replace(/,/g, ''));
@@ -276,25 +258,26 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
       }
     }
   } else if (isHDFC) {
-    // HDFC: Line format is "C9,42,000 C9,23,518 C3,76,800" (limit, available, cash limit)
-    // Find 3 consecutive C-numbers, largest is the total credit limit
-    const hdfcLimit = text.match(/C([\d,]+)\s+C([\d,]+)\s+C([\d,]+)/);
-    if (hdfcLimit) {
-      const vals = [hdfcLimit[1], hdfcLimit[2], hdfcLimit[3]]
-        .map(v => parseFloat(v.replace(/,/g, '')));
-      const limit = Math.max(...vals);
-      if (limit >= 10000) {
-        details.creditLimit = limit;
-        console.log(`💰 HDFC Credit limit: ₹${limit.toLocaleString('en-IN')}`);
-      }
+    // HDFC line: "C9,42,000 C9,23,518 C3,76,800"
+    // Find all groups of 3 consecutive C-numbers and take the largest
+    const allMatches = [...text.matchAll(/C([\d,]+)\s+C([\d,]+)\s+C([\d,]+)/g)];
+    let maxLimit = 0;
+    for (const m of allMatches) {
+      const vals = [m[1], m[2], m[3]].map(v => parseFloat(v.replace(/,/g, '')));
+      const maxVal = Math.max(...vals);
+      if (maxVal > maxLimit) maxLimit = maxVal;
+    }
+    if (maxLimit >= 10000) {
+      details.creditLimit = maxLimit;
+      console.log(`💰 HDFC Credit limit: ₹${maxLimit.toLocaleString('en-IN')}`);
     }
   }
 
-  // Fallback generic limit patterns
+  // Fallback for other banks
   if (!details.creditLimit) {
     const limitPatterns = [
-      /(?:Total\s+)?Credit\s+Limit\s+([\d,]+\.?\d*)/i,
-      /TOTAL\s+CREDIT\s+LIMIT[^C]*C([\d,]+)/i,
+      /Credit\s+Limit\s+([\d,]+\.?\d*)/i,
+      /CREDIT\s+LIMIT\s+([\d,]+)/i,
     ];
     for (const pattern of limitPatterns) {
       const match = text.match(pattern);
@@ -311,8 +294,8 @@ export function extractCardDetails(text: string): Partial<ParsedStatement> {
 
   // Minimum due
   const minDuePatterns = [
-    /MINIMUM\s+DUE\s*[₹C]?\s*([\d,]+\.?\d*)/i,
-    /Minimum\s+(?:Amount\s+)?(?:Payment\s+)?Due\s*[:\-]?\s*([\d,]+\.?\d*)\s*Dr/i,
+    /MINIMUM\s+DUE\s+DUE\s+DATE\s+C([\d,]+\.?\d*)/i,
+    /Minimum\s+Payment\s+Due\s+([\d,]+\.?\d*)\s+Dr/i,
   ];
 
   for (const pattern of minDuePatterns) {
